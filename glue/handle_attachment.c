@@ -1,4 +1,5 @@
 #include "gowhatsapp.h"
+#include "../opusreader.h"
 #include "libwhatsmeow.h"
 #include "constants.h"
 #include "pixbuf.h"
@@ -34,6 +35,30 @@ static void gowhatsapp_display_image_inline(gowhatsapp_message_t *gwamsg, const 
             }
         }
     }
+}
+
+static gboolean gowhatsapp_is_voice_mimetype(const char *mimetype) {
+    return mimetype != NULL &&
+        (g_str_has_prefix(mimetype, "audio/ogg") || g_str_has_prefix(mimetype, "application/ogg"));
+}
+
+/* Voice notes are Ogg/Opus, which WebKit cannot play; decode to WAV in the
+ * temporary directory and hand the chat a link the message view turns into
+ * an inline audio player. The WAV stays around for playback. */
+static void gowhatsapp_display_audio_inline(gowhatsapp_message_t *gwamsg, const char *local_file_path) {
+    gchar *wav_name = g_strdup_printf("AdiumVoice_%s.wav", gwamsg->hash_hex);
+    gchar *wav_path = g_build_filename(g_get_tmp_dir(), wav_name, NULL);
+    g_free(wav_name);
+    int64_t seconds = opusfile_decode_file_to_wav(local_file_path, wav_path);
+    if (seconds >= 0) {
+        gchar *text = g_strdup_printf("<a href=\"file://%s\">Voice message (%d:%02d)</a>",
+                                      wav_path, (int)(seconds / 60), (int)(seconds % 60));
+        gowhatsapp_display_text_message(gwamsg->account, gwamsg->senderJid, gwamsg->remoteJid, text, gwamsg->timestamp, gwamsg->isGroup, gwamsg->isOutgoing, gwamsg->name, 0, gwamsg->messageId, FALSE);
+        g_free(text);
+    } else {
+        gowhatsapp_display_text_message(gwamsg->account, gwamsg->senderJid, gwamsg->remoteJid, "Received a voice message, but it could not be decoded.", gwamsg->timestamp, gwamsg->isGroup, gwamsg->isOutgoing, gwamsg->name, PURPLE_MESSAGE_ERROR, gwamsg->messageId, TRUE);
+    }
+    g_free(wav_path);
 }
 
 static void gowhatsapp_display_caption(gowhatsapp_message_t *gwamsg) {
@@ -261,7 +286,11 @@ static gboolean download_to_temporary_directory(gowhatsapp_message_t *gwamsg) {
     if (error && error[0]) {
         gowhatsapp_display_text_message(gwamsg->account, gwamsg->senderJid, gwamsg->remoteJid, error, gwamsg->timestamp, gwamsg->isGroup, gwamsg->isOutgoing, gwamsg->name, PURPLE_MESSAGE_ERROR, gwamsg->messageId, TRUE);
     } else {
-        gowhatsapp_display_image_inline(gwamsg, local_path_tmp);
+        if (gowhatsapp_is_voice_mimetype(gwamsg->mimetype)) {
+            gowhatsapp_display_audio_inline(gwamsg, local_path_tmp);
+        } else {
+            gowhatsapp_display_image_inline(gwamsg, local_path_tmp);
+        }
         gowhatsapp_display_caption(gwamsg);
     }
     g_remove(local_path_tmp);
@@ -270,7 +299,8 @@ static gboolean download_to_temporary_directory(gowhatsapp_message_t *gwamsg) {
 
 void gowhatsapp_handle_attachment(gowhatsapp_message_t *gwamsg) {
     gboolean inline_only = purple_strequal(purple_account_get_string(gwamsg->account, GOWHATSAPP_HANDLE_IMAGES_OPTION, GOWHATSAPP_HANDLE_IMAGES_CHOICE_BOTH), GOWHATSAPP_HANDLE_IMAGES_CHOICE_INLINE);
-    inline_only &= gowhatsapp_attachment_is_inline_image(gwamsg); // only inline images which can be loaded
+    // only media the frontend can show: images by the upstream rule, plus voice notes, which Adium plays inline
+    inline_only &= (gowhatsapp_attachment_is_inline_image(gwamsg) || gowhatsapp_is_voice_mimetype(gwamsg->mimetype));
     if (inline_only) {
         download_to_temporary_directory(gwamsg);
     } else {
