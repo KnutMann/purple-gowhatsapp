@@ -140,7 +140,7 @@ gowhatsapp_subscribe_presence_updates(PurpleAccount *account, PurpleBuddy *buddy
 void gowhatsapp_request_profile_picture(PurpleAccount *account, PurpleBuddy *buddy) {
     g_return_if_fail(buddy != NULL);
 
-    if (!purple_strequal(purple_account_get_string(account, GOWHATSAPP_ICONS_OPTION, GOWHATSAPP_ICONS_CHOICE_NO), GOWHATSAPP_ICONS_CHOICE_NO)) {
+    if (!purple_strequal(purple_account_get_string(account, GOWHATSAPP_ICONS_OPTION, GOWHATSAPP_ICONS_CHOICE_ORIGINAL), GOWHATSAPP_ICONS_CHOICE_NO)) {
         const char *picture_id = purple_blist_node_get_string(&buddy->node, "picture_id");
         const char *picture_date = purple_blist_node_get_string(&buddy->node, "picture_date");
         gowhatsapp_go_request_profile_picture(account, buddy->name, (char *)picture_date, (char *)picture_id); // cgo does not suport const
