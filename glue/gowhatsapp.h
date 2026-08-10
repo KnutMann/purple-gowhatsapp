@@ -55,7 +55,7 @@ void gowhatsapp_free_name(PurpleConversation *conv);
 char *gowhatsapp_get_cb_alias(PurpleConnection *gc, int id, const char *who);
 
 // blist
-PurpleBuddy * gowhatsapp_ensure_buddy_in_blist(PurpleAccount *account, const char *remoteJid, const char *display_name);
+PurpleBuddy * gowhatsapp_ensure_buddy_in_blist(PurpleAccount *account, const char *remoteJid, const char *display_name, gboolean authoritative);
 PurpleChat * gowhatsapp_ensure_group_chat_in_blist(PurpleAccount *account, const char *remoteJid, const char *topic);
 PurpleGroup * gowhatsapp_get_purple_group();
 PurpleChat * gowhatsapp_find_blist_chat(PurpleAccount *account, const char *jid);

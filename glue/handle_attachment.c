@@ -1,11 +1,16 @@
 #include "gowhatsapp.h"
+#include "../opusreader.h"
 #include "libwhatsmeow.h"
 #include "constants.h"
 #include "pixbuf.h"
 #include "glib/gstdio.h"
 
 static void gowhatsapp_display_image_inline(gowhatsapp_message_t *gwamsg, const char *local_file_path) {
-    const gboolean inline_images = !purple_strequal(purple_account_get_string(gwamsg->account, GOWHATSAPP_HANDLE_IMAGES_OPTION, GOWHATSAPP_HANDLE_IMAGES_CHOICE_BOTH), GOWHATSAPP_HANDLE_IMAGES_CHOICE_ATTACHMENT);
+    const gboolean inline_images = !purple_strequal(purple_account_get_string(gwamsg->account, GOWHATSAPP_HANDLE_IMAGES_OPTION, GOWHATSAPP_HANDLE_IMAGES_CHOICE_INLINE), GOWHATSAPP_HANDLE_IMAGES_CHOICE_ATTACHMENT);
+    purple_debug_info("whatsmeow", "display_image_inline: inline=%d mimetype=%s loadable=%d isOutgoing=%d sender=%s\n",
+                      inline_images, gwamsg->mimetype ? gwamsg->mimetype : "(null)",
+                      pixbuf_is_loadable_image_mimetype(gwamsg->mimetype), gwamsg->isOutgoing,
+                      gwamsg->senderJid ? gwamsg->senderJid : "(null)");
     if (inline_images && pixbuf_is_loadable_image_mimetype(gwamsg->mimetype)) {
         gchar *data = NULL;
         size_t len;
@@ -20,6 +25,30 @@ static void gowhatsapp_display_image_inline(gowhatsapp_message_t *gwamsg, const 
             }
         }
     }
+}
+
+static gboolean gowhatsapp_is_voice_mimetype(const char *mimetype) {
+    return mimetype != NULL &&
+        (g_str_has_prefix(mimetype, "audio/ogg") || g_str_has_prefix(mimetype, "application/ogg"));
+}
+
+/* Voice notes are Ogg/Opus, which WebKit cannot play; decode to WAV in the
+ * temporary directory and hand the chat a link the message view turns into
+ * an inline audio player. The WAV stays around for playback. */
+static void gowhatsapp_display_audio_inline(gowhatsapp_message_t *gwamsg, const char *local_file_path) {
+    gchar *wav_name = g_strdup_printf("AdiumVoice_%s.wav", gwamsg->hash_hex);
+    gchar *wav_path = g_build_filename(g_get_tmp_dir(), wav_name, NULL);
+    g_free(wav_name);
+    int64_t seconds = opusfile_decode_file_to_wav(local_file_path, wav_path);
+    if (seconds >= 0) {
+        gchar *text = g_strdup_printf("<a href=\"file://%s\">Voice message (%d:%02d)</a>",
+                                      wav_path, (int)(seconds / 60), (int)(seconds % 60));
+        gowhatsapp_display_text_message(gwamsg->account, gwamsg->senderJid, gwamsg->remoteJid, text, gwamsg->timestamp, gwamsg->isGroup, gwamsg->isOutgoing, gwamsg->name, 0, gwamsg->messageId, FALSE);
+        g_free(text);
+    } else {
+        gowhatsapp_display_text_message(gwamsg->account, gwamsg->senderJid, gwamsg->remoteJid, "Received a voice message, but it could not be decoded.", gwamsg->timestamp, gwamsg->isGroup, gwamsg->isOutgoing, gwamsg->name, PURPLE_MESSAGE_ERROR, gwamsg->messageId, TRUE);
+    }
+    g_free(wav_path);
 }
 
 static void gowhatsapp_display_caption(gowhatsapp_message_t *gwamsg) {
@@ -84,7 +113,14 @@ static void download_via_xfer_mechanism(gowhatsapp_message_t *gwamsg) {
     }
     
     PurpleXfer * xfer = purple_xfer_new(gwamsg->account, PURPLE_XFER_RECEIVE, sender);
-    char *filename = g_strdup_printf("%s%s%s", gwamsg->hash_hex, gwamsg->filename, gwamsg->extension);
+    /* Prefer the original file name (documents carry one); fall back to the
+     * content hash for nameless media like voice notes. */
+    char *filename;
+    if (gwamsg->filename != NULL && gwamsg->filename[0]) {
+        filename = g_strdup_printf("%s%s", gwamsg->filename, gwamsg->extension);
+    } else {
+        filename = g_strdup_printf("%s%s", gwamsg->hash_hex, gwamsg->extension);
+    }
     purple_xfer_set_filename(xfer, filename);
     g_free(filename);
     purple_xfer_set_size(xfer, gwamsg->filesize);
@@ -240,7 +276,11 @@ static gboolean download_to_temporary_directory(gowhatsapp_message_t *gwamsg) {
     if (error && error[0]) {
         gowhatsapp_display_text_message(gwamsg->account, gwamsg->senderJid, gwamsg->remoteJid, error, gwamsg->timestamp, gwamsg->isGroup, gwamsg->isOutgoing, gwamsg->name, PURPLE_MESSAGE_ERROR, gwamsg->messageId, TRUE);
     } else {
-        gowhatsapp_display_image_inline(gwamsg, local_path_tmp);
+        if (gowhatsapp_is_voice_mimetype(gwamsg->mimetype)) {
+            gowhatsapp_display_audio_inline(gwamsg, local_path_tmp);
+        } else {
+            gowhatsapp_display_image_inline(gwamsg, local_path_tmp);
+        }
         gowhatsapp_display_caption(gwamsg);
     }
     g_remove(local_path_tmp);
@@ -248,8 +288,8 @@ static gboolean download_to_temporary_directory(gowhatsapp_message_t *gwamsg) {
 }
 
 void gowhatsapp_handle_attachment(gowhatsapp_message_t *gwamsg) {
-    gboolean inline_only = purple_strequal(purple_account_get_string(gwamsg->account, GOWHATSAPP_HANDLE_IMAGES_OPTION, GOWHATSAPP_HANDLE_IMAGES_CHOICE_BOTH), GOWHATSAPP_HANDLE_IMAGES_CHOICE_INLINE);
-    inline_only &= pixbuf_is_loadable_image_mimetype(gwamsg->mimetype); // only inline images which can be loaded
+    gboolean inline_only = purple_strequal(purple_account_get_string(gwamsg->account, GOWHATSAPP_HANDLE_IMAGES_OPTION, GOWHATSAPP_HANDLE_IMAGES_CHOICE_INLINE), GOWHATSAPP_HANDLE_IMAGES_CHOICE_INLINE);
+    inline_only &= (pixbuf_is_loadable_image_mimetype(gwamsg->mimetype) || gowhatsapp_is_voice_mimetype(gwamsg->mimetype)); // only media the frontend can show
     if (inline_only) {
         download_to_temporary_directory(gwamsg);
     } else {

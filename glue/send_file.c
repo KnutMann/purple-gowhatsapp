@@ -1,5 +1,34 @@
 #include "gowhatsapp.h"
 #include "libwhatsmeow.h"
+#include <string.h>
+
+/* After a successful outgoing transfer, echo the image into the chat so the
+ * sender sees what they sent (mirrors the inline display of received images). */
+static void
+gowhatsapp_display_sent_image_inline(PurpleAccount *account, const char *who, const char *filename)
+{
+    gchar *data = NULL;
+    gsize len = 0;
+    if (!g_file_get_contents(filename, &data, &len, NULL)) {
+        return;
+    }
+    gboolean is_png = (len > 8 && memcmp(data, "\x89PNG", 4) == 0);
+    gboolean is_jpg = (len > 3 && (guchar)data[0] == 0xFF && (guchar)data[1] == 0xD8);
+    if (!is_png && !is_jpg) {
+        g_free(data);
+        return;
+    }
+    int img_id = purple_imgstore_add_with_id(data, len, NULL); // takes ownership of data
+    if (img_id > 0) {
+        gboolean isGroup = (strstr(who, "@g.us") != NULL);
+        gchar *text = g_strdup_printf("<img id=\"%u\">", img_id);
+        gowhatsapp_display_text_message(account, (char *)who, (char *)who, text, time(NULL), isGroup, TRUE, NULL, PURPLE_MESSAGE_IMAGES, NULL, FALSE);
+        g_free(text);
+        purple_imgstore_unref_by_id(img_id);
+    } else {
+        g_free(data);
+    }
+}
 
 static void
 gowhatsapp_free_xfer(PurpleXfer *xfer)
@@ -19,6 +48,7 @@ gowhatsapp_xfer_send_init(PurpleXfer *xfer)
     } else {
         purple_xfer_set_bytes_sent(xfer, purple_xfer_get_size(xfer));
         purple_xfer_set_completed(xfer, TRUE);
+        gowhatsapp_display_sent_image_inline(account, who, filename);
     }
     g_free(error);
 }

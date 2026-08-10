@@ -289,6 +289,16 @@ func gowhatsapp_go_get_contacts(account *PurpleAccount, flush C.int) {
 					}
 					C.gowhatsapp_process_message_bridge(cmessage)
 				}
+				// also announce our own profile name so the UI can adopt it
+				if handler.client.Store.ID != nil && handler.client.Store.PushName != "" {
+					cmessage := C.struct_gowhatsapp_message{
+						account:   account,
+						msgtype:   C.char(C.gowhatsapp_message_type_name),
+						remoteJid: C.CString(handler.client.Store.ID.ToNonAD().String()),
+						name:      C.CString(handler.client.Store.PushName),
+					}
+					C.gowhatsapp_process_message_bridge(cmessage)
+				}
 				// send one "nil" contact to indicate end of list
 				cmessage := C.struct_gowhatsapp_message{
 					account:   account,

@@ -27,32 +27,43 @@ void gowhatsapp_assume_buddy_away(PurpleAccount *account, PurpleBuddy *buddy) {
  * identifier is the username (purple who)
  * name is the human readable name (purple alias).
  */
-PurpleBuddy * gowhatsapp_ensure_buddy_in_blist(PurpleAccount *account, const char *identifier, const char *name) {
+PurpleBuddy * gowhatsapp_ensure_buddy_in_blist(PurpleAccount *account, const char *identifier, const char *name, gboolean authoritative) {
     if (purple_str_has_suffix(identifier, "@lid")) {
         // TODO: combine into existing non-hidden buddy
         return NULL;
+    }
+
+    /* Group JIDs surface as "buddies" via file transfer attribution
+     * (group-is-file-origin). Give them the group's name from the chat
+     * entry so the contact list does not show a bare JID. */
+    if (purple_str_has_suffix(identifier, "@g.us") && (name == NULL || !*name)) {
+        PurpleChat *group_chat = purple_blist_find_chat(account, identifier);
+        if (group_chat != NULL) {
+            name = purple_chat_get_name(group_chat);
+            authoritative = FALSE;
+        }
     }
 
     PurpleBuddy *buddy = purple_blist_find_buddy(account, identifier);
 
     if (!buddy) {
         PurpleGroup *group = gowhatsapp_get_purple_group();
-        buddy = purple_buddy_new(account, identifier, name); // MEMCHECK: blist takes ownership
+        buddy = purple_buddy_new(account, identifier, NULL); // MEMCHECK: blist takes ownership; no local alias – that belongs to the user
         purple_blist_add_buddy(buddy, NULL, group, NULL);
         gowhatsapp_subscribe_presence_updates(account, buddy);
     }
 
-    // update name after checking against local alias and persisted name
+    /* Update the server-side alias only. The local alias stays under the user's
+     * control. Authoritative names come from the contact sync (the address book
+     * name); non-authoritative ones are push names riding along with messages,
+     * which must never overwrite a synced name. */
     if (name != NULL && *name) {
-        const char *local_alias = purple_buddy_get_alias(buddy);
         const char *server_alias = purple_blist_node_get_string(&buddy->node, "server_alias");
-        if (local_alias == NULL) {
-            // if no local alias exists, use the provided one
-            purple_blist_alias_buddy(buddy, name);
-        }
-        if (!purple_strequal(local_alias, name) && !purple_strequal(server_alias, name)) {
-            purple_serv_got_alias(purple_account_get_connection(account), identifier, name); // this sets buddy->server_alias, but it is not persisted
-            purple_blist_node_set_string(&buddy->node, "server_alias", name); // explicitly persist the new name so there is no name-change reported after a restart
+        gboolean update = authoritative ? !purple_strequal(server_alias, name)
+                                        : (server_alias == NULL || !*server_alias);
+        if (update) {
+            purple_serv_got_alias(purple_account_get_connection(account), identifier, name);
+            purple_blist_node_set_string(&buddy->node, "server_alias", name); // persist so there is no name-change reported after a restart
         }
     }
 

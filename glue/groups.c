@@ -168,6 +168,8 @@ void gowhatsapp_handle_group(PurpleConnection *pc, gowhatsapp_message_t *gwamsg)
         // this might be a delayed response to a query for participants of a currently active group chat
         PurpleConversation *conv = purple_find_conversation_with_account(PURPLE_CONV_TYPE_CHAT, gwamsg->remoteJid, gwamsg->account);
         if (conv != NULL) {
+            // refresh the human readable title from the (possibly just updated) blist alias
+            purple_conversation_autoset_title(conv);
             PurpleConvChat *conv_chat = purple_conversation_get_chat_data(conv);
             if (conv_chat != NULL) {
                 gowhatsapp_chat_set_participants(conv_chat, gwamsg->participants);
@@ -190,12 +192,30 @@ void gowhatsapp_handle_group(PurpleConnection *pc, gowhatsapp_message_t *gwamsg)
  */
 void 
 gowhatsapp_chat_set_participants(PurpleConvChat *conv_chat, char **participants) {
+    PurpleConversation *conv = purple_conv_chat_get_conversation(conv_chat);
+    PurpleAccount *account = conv ? purple_conversation_get_account(conv) : NULL;
     // remove all users
     purple_conv_chat_clear_users(conv_chat);
-    // now add all current users
+    // now add all current users, resolving their display names where possible
     for(char **participant_ptr = participants; participant_ptr != NULL && *participant_ptr != NULL; participant_ptr++) {
         PurpleConvChatBuddyFlags flags = 0;
-        purple_conv_chat_add_user(conv_chat, *participant_ptr, NULL, flags, FALSE);
+        char *alias = NULL;
+        if (account != NULL) {
+            if (purple_strequal(*participant_ptr, purple_account_get_username(account))) {
+                /* Ourselves: prefer the WhatsApp profile name over our own
+                 * address book card, matching how outgoing messages are shown */
+                const char *self_name = purple_account_get_string(account, "self-display-name", NULL);
+                if (self_name && *self_name) {
+                    alias = strdup(self_name);
+                }
+            }
+            if (alias == NULL || !*alias) {
+                free(alias);
+                alias = gowhatsapp_go_get_display_name(account, *participant_ptr);
+            }
+        }
+        purple_conv_chat_add_user(conv_chat, *participant_ptr, (alias && *alias) ? alias : NULL, flags, FALSE);
+        free(alias);
     }
 }
 
