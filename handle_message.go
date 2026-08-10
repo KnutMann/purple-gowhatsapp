@@ -160,6 +160,27 @@ func (handler *Handler) handle_message(message *waE2E.Message, info types.Messag
 		}
 	}
 	{
+		lm := message.GetLocationMessage()
+		if lm != nil {
+			label := lm.GetName()
+			if label == "" {
+				label = lm.GetAddress()
+			}
+			if label == "" {
+				label = "Shared location"
+			}
+			text += fmt.Sprintf("%s: https://maps.apple.com/?ll=%f,%f&q=%f,%f", label,
+				lm.GetDegreesLatitude(), lm.GetDegreesLongitude(),
+				lm.GetDegreesLatitude(), lm.GetDegreesLongitude())
+		}
+		llm := message.GetLiveLocationMessage()
+		if llm != nil {
+			text += fmt.Sprintf("Sharing live location (last position: https://maps.apple.com/?ll=%f,%f&q=%f,%f)",
+				llm.GetDegreesLatitude(), llm.GetDegreesLongitude(),
+				llm.GetDegreesLatitude(), llm.GetDegreesLongitude())
+		}
+	}
+	{
 		pcm := GetAnyPollCreationMessage(message)
 		if pcm != nil {
 			//handler.log.Infof("message poll creation: %#v", pcm)

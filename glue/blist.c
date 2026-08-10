@@ -33,15 +33,11 @@ PurpleBuddy * gowhatsapp_ensure_buddy_in_blist(PurpleAccount *account, const cha
         return NULL;
     }
 
-    /* Group JIDs surface as "buddies" via file transfer attribution
-     * (group-is-file-origin). Give them the group's name from the chat
-     * entry so the contact list does not show a bare JID. */
-    if (purple_str_has_suffix(identifier, "@g.us") && (name == NULL || !*name)) {
-        PurpleChat *group_chat = purple_blist_find_chat(account, identifier);
-        if (group_chat != NULL) {
-            name = purple_chat_get_name(group_chat);
-            authoritative = FALSE;
-        }
+    /* Groups are chats (bookmarks), not contacts: never create a buddy
+     * for a group JID. Opening such a pseudo-contact would start a 1:1
+     * conversation with the group JID, which silently goes nowhere. */
+    if (purple_str_has_suffix(identifier, "@g.us")) {
+        return NULL;
     }
 
     PurpleBuddy *buddy = purple_blist_find_buddy(account, identifier);
