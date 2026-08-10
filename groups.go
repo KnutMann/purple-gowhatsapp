@@ -16,9 +16,10 @@ import (
 func (handler *Handler) query_group_participants_retry(group_jid types.JID, seconds_backoff int, max_retries int, retry_count int) []types.GroupParticipant {
 	group, err := handler.client.GetGroupInfo(context.TODO(), group_jid)
 	if err == nil && group != nil {
-		if retry_count > 0 {
-			purple_update_group(handler.account, group)
-		} else {
+		// always feed the full group info (name included) back to purple,
+		// so conversation titles resolve even on the first fetch
+		purple_update_group(handler.account, group)
+		if retry_count == 0 {
 			return group.Participants
 		}
 	} else {

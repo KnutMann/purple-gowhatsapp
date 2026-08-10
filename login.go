@@ -161,7 +161,8 @@ func login(account *PurpleAccount, purple_user_dir string, username string, cred
 		pictureRequests:  make(chan ProfilePictureRequest, 1000), // I hope that no user has more than 1000 contacts
 	}
 	handlers[account] = &handler
-	handler.LoadCachedMessages(filepath.Join(purple_user_dir, username+".json"))
+	handler.cacheFilePath = filepath.Join(purple_user_dir, username+".json")
+	handler.LoadCachedMessages(handler.cacheFilePath)
 	handler.client.AddEventHandler(handler.eventHandler)
 
 	if proxy_address != "" {

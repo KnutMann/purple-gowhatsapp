@@ -61,8 +61,12 @@ func (handler *Handler) add_to_cache(message *waE2E.Message, id types.MessageID,
 		// TODO: also add FromMe and IsGroup since they are necessary for BuildPollVote
 	})
 	// from https://www.delftstack.com/howto/go/queue-implementation-in-golang/
-	if len(handler.cachedMessages) > purple_get_int(handler.account, C.GOWHATSAPP_MESSAGE_CACHE_SIZE_OPTION, 0) {
+	if len(handler.cachedMessages) > purple_get_int(handler.account, C.GOWHATSAPP_MESSAGE_CACHE_SIZE_OPTION, 100) {
 		handler.cachedMessages = handler.cachedMessages[1:]
+	}
+	// persist after every addition so the cache survives an unclean shutdown
+	if handler.cacheFilePath != "" {
+		handler.SaveCachedMessages(handler.cacheFilePath)
 	}
 }
 

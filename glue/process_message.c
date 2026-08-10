@@ -105,8 +105,13 @@ gowhatsapp_process_message(gowhatsapp_message_t *gwamsg)
                 gowhatsapp_connection_set_online(pc);
                 // we also want to query the room list automatically (so group chats may be added to the buddy list).
                 gowhatsapp_roomlist_get_list(pc);
+            } else if (purple_strequal(gwamsg->remoteJid, purple_account_get_username(gwamsg->account))) {
+                /* Our own profile name; expose it so the UI can adopt it */
+                if (gwamsg->name && *gwamsg->name) {
+                    purple_account_set_string(gwamsg->account, "self-display-name", gwamsg->name);
+                }
             } else {
-                gowhatsapp_ensure_buddy_in_blist(gwamsg->account, gwamsg->remoteJid, gwamsg->name);
+                gowhatsapp_ensure_buddy_in_blist(gwamsg->account, gwamsg->remoteJid, gwamsg->name, TRUE);
             }
             break;
         case gowhatsapp_message_type_disconnected:

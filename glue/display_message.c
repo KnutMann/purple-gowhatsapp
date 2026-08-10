@@ -80,7 +80,7 @@ void gowhatsapp_display_text_message(
             purple_conv_im_write(purple_conversation_get_im_data(conv), remoteJid, text_with_id, flags, timestamp);
         } else {
             if (purple_account_get_bool(account, GOWHATSAPP_UPDATE_BUDDY_ON_MESSAGE_OPTION, TRUE)) {
-                gowhatsapp_ensure_buddy_in_blist(account, remoteJid, name);
+                gowhatsapp_ensure_buddy_in_blist(account, remoteJid, name, FALSE);
             }
             purple_serv_got_im(connection, remoteJid, text_with_id, flags, timestamp);
         }

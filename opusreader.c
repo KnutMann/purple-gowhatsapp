@@ -5,6 +5,8 @@
 #include <opusfile.h>
 #include <glib.h>
 #include <math.h>
+#include <string.h>
+#include <stdio.h>
 
 // TODO: assert ogg_int64_t is int64_t because that is what cgo is written to expect
 
@@ -64,12 +66,71 @@ struct opusfile_info opusfile_get_info(void *data, size_t size) {
   return info;
 }
 
+int64_t opusfile_decode_file_to_wav(const char *ogg_path, const char *wav_path) {
+  int error;
+  OggOpusFile *of = op_open_file(ogg_path, &error);
+  if (of == NULL) {
+    return -1;
+  }
+  int channels = op_channel_count(of, -1);
+  if (channels < 1 || channels > 2) {
+    op_free(of);
+    return -1;
+  }
+  FILE *out = fopen(wav_path, "wb");
+  if (out == NULL) {
+    op_free(of);
+    return -1;
+  }
+  unsigned char header[44] = {0};
+  fwrite(header, 1, sizeof(header), out); // placeholder, rewritten below
+
+  opus_int16 pcm[120 * 48 * 2];
+  int64_t total_samples = 0;
+  int n;
+  while ((n = op_read(of, pcm, 120 * 48 * 2, NULL)) > 0) {
+    fwrite(pcm, sizeof(opus_int16) * channels, n, out);
+    total_samples += n;
+  }
+  op_free(of);
+
+  uint32_t sample_rate = 48000;
+  uint32_t data_bytes = (uint32_t)(total_samples * channels * 2);
+  uint32_t byte_rate = sample_rate * channels * 2;
+  uint16_t block_align = channels * 2;
+  uint32_t riff_size = 36 + data_bytes;
+  memcpy(header, "RIFF", 4);
+  memcpy(header + 4, &riff_size, 4);
+  memcpy(header + 8, "WAVEfmt ", 8);
+  uint32_t fmt_size = 16; memcpy(header + 16, &fmt_size, 4);
+  uint16_t fmt_pcm = 1; memcpy(header + 20, &fmt_pcm, 2);
+  uint16_t ch16 = (uint16_t)channels; memcpy(header + 22, &ch16, 2);
+  memcpy(header + 24, &sample_rate, 4);
+  memcpy(header + 28, &byte_rate, 4);
+  memcpy(header + 32, &block_align, 2);
+  uint16_t bits = 16; memcpy(header + 34, &bits, 2);
+  memcpy(header + 36, "data", 4);
+  memcpy(header + 40, &data_bytes, 4);
+  fseek(out, 0, SEEK_SET);
+  fwrite(header, 1, sizeof(header), out);
+  fclose(out);
+
+  if (total_samples == 0) {
+    return -1;
+  }
+  return total_samples / sample_rate;
+}
+
 #else
 
 #pragma message "Warning: Building without opusfile. Sending voice messages is disabled."
 struct opusfile_info opusfile_get_info(void *data, size_t size) {
   struct opusfile_info info = {.length_seconds = -1}; // use negative length to indicate error
   return info;
+}
+
+int64_t opusfile_decode_file_to_wav(const char *ogg_path, const char *wav_path) {
+  return -1;
 }
 
 #endif
