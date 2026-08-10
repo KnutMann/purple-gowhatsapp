@@ -51,6 +51,44 @@ static void gowhatsapp_display_audio_inline(gowhatsapp_message_t *gwamsg, const 
     g_free(wav_path);
 }
 
+/* Documents (and other non-image, non-voice, non-video attachments) are
+ * auto-downloaded to the user's download directory and announced with a
+ * clickable file link — WhatsApp semantics, avoiding the transfer prompt
+ * (which would target the group JID as a pseudo 1:1 contact). */
+static void gowhatsapp_display_document_inline(gowhatsapp_message_t *gwamsg) {
+    const char *downloads = g_get_user_special_dir(G_USER_DIRECTORY_DOWNLOAD);
+    if (downloads == NULL) {
+        downloads = g_get_tmp_dir();
+    }
+    gchar *base;
+    if (gwamsg->filename != NULL && gwamsg->filename[0]) {
+        base = g_strdup_printf("%s%s", gwamsg->filename, gwamsg->extension);
+    } else {
+        base = g_strdup_printf("%s%s", gwamsg->hash_hex, gwamsg->extension);
+    }
+    gchar *local_path = g_build_filename(downloads, base, NULL);
+    for (int i = 2; g_file_test(local_path, G_FILE_TEST_EXISTS) && i < 100; i++) {
+        g_free(local_path);
+        gchar *numbered = g_strdup_printf("%s (%d)%s",
+            (gwamsg->filename && gwamsg->filename[0]) ? gwamsg->filename : gwamsg->hash_hex,
+            i, gwamsg->extension);
+        local_path = g_build_filename(downloads, numbered, NULL);
+        g_free(numbered);
+    }
+    char *error = gowhatsapp_go_download_attachment(gwamsg->account, local_path, gwamsg->download_handle);
+    gwamsg->download_handle = 0;
+    if (error && error[0]) {
+        gowhatsapp_display_text_message(gwamsg->account, gwamsg->senderJid, gwamsg->remoteJid, error, gwamsg->timestamp, gwamsg->isGroup, gwamsg->isOutgoing, gwamsg->name, PURPLE_MESSAGE_ERROR, gwamsg->messageId, TRUE);
+    } else {
+        gchar *text = g_strdup_printf("<a href=\"file://%s\">%s</a>", local_path, base);
+        gowhatsapp_display_text_message(gwamsg->account, gwamsg->senderJid, gwamsg->remoteJid, text, gwamsg->timestamp, gwamsg->isGroup, gwamsg->isOutgoing, gwamsg->name, 0, gwamsg->messageId, FALSE);
+        g_free(text);
+    }
+    g_free(error);
+    g_free(local_path);
+    g_free(base);
+}
+
 static void gowhatsapp_display_caption(gowhatsapp_message_t *gwamsg) {
     if (gwamsg->text && gwamsg->text[0]) {
         gowhatsapp_display_text_message(gwamsg->account, gwamsg->senderJid, gwamsg->remoteJid, gwamsg->text, gwamsg->timestamp, gwamsg->isGroup, gwamsg->isOutgoing, gwamsg->name, 0, gwamsg->messageId, TRUE);
@@ -288,10 +326,14 @@ static gboolean download_to_temporary_directory(gowhatsapp_message_t *gwamsg) {
 }
 
 void gowhatsapp_handle_attachment(gowhatsapp_message_t *gwamsg) {
-    gboolean inline_only = purple_strequal(purple_account_get_string(gwamsg->account, GOWHATSAPP_HANDLE_IMAGES_OPTION, GOWHATSAPP_HANDLE_IMAGES_CHOICE_INLINE), GOWHATSAPP_HANDLE_IMAGES_CHOICE_INLINE);
-    inline_only &= (pixbuf_is_loadable_image_mimetype(gwamsg->mimetype) || gowhatsapp_is_voice_mimetype(gwamsg->mimetype)); // only media the frontend can show
+    gboolean inline_mode = purple_strequal(purple_account_get_string(gwamsg->account, GOWHATSAPP_HANDLE_IMAGES_OPTION, GOWHATSAPP_HANDLE_IMAGES_CHOICE_INLINE), GOWHATSAPP_HANDLE_IMAGES_CHOICE_INLINE);
+    gboolean is_video = (gwamsg->mimetype != NULL && g_str_has_prefix(gwamsg->mimetype, "video/"));
+    gboolean inline_only = inline_mode && (pixbuf_is_loadable_image_mimetype(gwamsg->mimetype) || gowhatsapp_is_voice_mimetype(gwamsg->mimetype)); // media the frontend can show
     if (inline_only) {
         download_to_temporary_directory(gwamsg);
+    } else if (inline_mode && !is_video) {
+        gowhatsapp_display_document_inline(gwamsg);
+        gowhatsapp_display_caption(gwamsg);
     } else {
         const char *local_path_template = purple_account_get_string(gwamsg->account, GOWHATSAPP_ATTACHMENT_PATH_TEMPLATE_OPTION, GOWHATSAPP_ATTACHMENT_PATH_TEMPLATE_DEFAULT);
         if (local_path_template && local_path_template[0]) {
