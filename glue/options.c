@@ -209,7 +209,7 @@ gowhatsapp_add_account_options(GList *account_options)
     option = purple_account_option_bool_new( // MEMCHECK: account_options takes ownership
         "Inline images of all types (requires frontend support)",
         GOWHATSAPP_INLINE_ALL_IMAGES_OPTION,
-        FALSE
+        TRUE // Adium draws images itself and needs no gdk-pixbuf loader, so it is such a frontend
         );
     account_options = g_list_append(account_options, option);
 
