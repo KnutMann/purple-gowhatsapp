@@ -36,6 +36,20 @@ gowhatsapp_handle_presence(PurpleAccount *account, char *remoteJid, char online,
 void
 gowhatsapp_handle_profile_picture(gowhatsapp_message_t *gwamsg)
 {
+    /* A group's picture cannot go where a contact's goes. purple_buddy_icons_set_for_user only keeps
+     * an icon that some buddy or open conversation takes a reference to, and a group is neither, so
+     * for one it would allocate the image, find no taker and free it again on the spot. What
+     * libpurple does offer for any node in the list, chats included, is a custom icon, which also
+     * survives a restart because the file name is written into blist.xml. */
+    PurpleChat *chat = gowhatsapp_find_blist_chat(gwamsg->account, gwamsg->remoteJid);
+    if (chat != NULL) {
+        // MEMCHECK: purple_buddy_icons_node_set_custom_icon takes ownership of the blob, as set_for_user does
+        purple_buddy_icons_node_set_custom_icon((PurpleBlistNode *)chat, (guchar *)gwamsg->blob, gwamsg->blobsize);
+        purple_blist_node_set_string(&chat->node, "picture_id", gwamsg->messageId);
+        purple_blist_node_set_string(&chat->node, "picture_date", gwamsg->text);
+        return;
+    }
+
     purple_buddy_icons_set_for_user(gwamsg->account, gwamsg->remoteJid, gwamsg->blob, gwamsg->blobsize, NULL);
     // no g_free(gwamsg->blob) here – purple takes ownership
     const char *buddy_alias = gwamsg->senderJid;
@@ -134,6 +148,31 @@ gowhatsapp_subscribe_presence_updates(PurpleAccount *account, PurpleBuddy *buddy
         // NOTE: WhatsApp requires you to be available to receive presence updates
         // subscribing for presence updates might implicitly set own presence to available
         gowhatsapp_go_subscribe_presence(account, buddy->name);
+    }
+}
+
+/*
+ * Ask for a group's picture, the way gowhatsapp_request_profile_picture asks for a contact's.
+ *
+ * whatsmeow's GetProfilePictureInfo takes a JID and does not care whether it belongs to a person or
+ * to a group, so the Go layer needs nothing new. What differs is where the answer is put, since a
+ * group is not a buddy; see gowhatsapp_handle_profile_picture.
+ *
+ * The identifier is the "name" component and not the chat's own name, which answers with the alias
+ * once one is set.
+ */
+void gowhatsapp_request_chat_profile_picture(PurpleAccount *account, PurpleChat *chat) {
+    g_return_if_fail(chat != NULL);
+
+    if (!purple_strequal(purple_account_get_string(account, GOWHATSAPP_ICONS_OPTION, GOWHATSAPP_ICONS_CHOICE_ORIGINAL), GOWHATSAPP_ICONS_CHOICE_NO)) {
+        GHashTable *components = purple_chat_get_components(chat);
+        const char *remoteJid = components ? g_hash_table_lookup(components, "name") : NULL;
+
+        if (remoteJid != NULL) {
+            const char *picture_id = purple_blist_node_get_string(&chat->node, "picture_id");
+            const char *picture_date = purple_blist_node_get_string(&chat->node, "picture_date");
+            gowhatsapp_go_request_profile_picture(account, (char *)remoteJid, (char *)picture_date, (char *)picture_id); // cgo does not support const
+        }
     }
 }
 

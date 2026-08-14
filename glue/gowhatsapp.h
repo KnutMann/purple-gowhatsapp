@@ -63,6 +63,8 @@ void gowhatsapp_add_buddy(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup 
 void gowhatsapp_tooltip_text(PurpleBuddy *buddy, PurpleNotifyUserInfo *info, gboolean full);
 void gowhatsapp_assume_buddy_away(PurpleAccount *account, PurpleBuddy *buddy);
 void gowhatsapp_for_all_buddies(PurpleAccount *account, void(*func)(PurpleAccount *, PurpleBuddy *));
+void gowhatsapp_for_all_chats(PurpleAccount *account, void(*func)(PurpleAccount *, PurpleChat *));
+void gowhatsapp_request_chat_profile_picture(PurpleAccount *account, PurpleChat *chat);
 
 // send_message
 int gowhatsapp_send_im(PurpleConnection *pc, const gchar *who, const gchar *message, PurpleMessageFlags flags);

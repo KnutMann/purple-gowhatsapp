@@ -88,6 +88,30 @@ void gowhatsapp_for_all_buddies(PurpleAccount *account, void(*func)(PurpleAccoun
     }
 }
 
+/*
+ * Calls a function once on each group chat of this account.
+ *
+ * The counterpart of gowhatsapp_for_all_buddies, and needed because a group is deliberately not a
+ * buddy here: a chat cannot be messaged like a contact, and a contact list row for one is a row that
+ * leads nowhere. Anything that wants to treat groups the way contacts are treated has to walk them
+ * separately, and the walk is the one gowhatsapp_find_blist_chat already does.
+ */
+void gowhatsapp_for_all_chats(PurpleAccount *account, void(*func)(PurpleAccount *, PurpleChat *)) {
+    g_return_if_fail(account != NULL);
+
+    for (PurpleBlistNode *node = purple_blist_get_root();
+         node != NULL;
+         node = purple_blist_node_next(node, TRUE)) {
+        if (PURPLE_IS_CHAT(node)) {
+            PurpleChat *chat = PURPLE_CHAT(node);
+
+            if (purple_chat_get_account(chat) == account) {
+                func(account, chat);
+            }
+        }
+    }
+}
+
 // Group chat related functions
 
 /*
