@@ -35,6 +35,7 @@ static void gowhatsapp_connection_set_online(PurpleConnection *connection) {
     gowhatsapp_set_presence(account, purple_account_get_active_status(account));
 
     gowhatsapp_for_all_buddies(account, gowhatsapp_request_profile_picture);
+    gowhatsapp_for_all_chats(account, gowhatsapp_request_chat_profile_picture);
 }
 
 /*
