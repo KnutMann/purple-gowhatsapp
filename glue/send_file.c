@@ -22,7 +22,12 @@ gowhatsapp_display_sent_image_inline(PurpleAccount *account, const char *who, co
     if (img_id > 0) {
         gboolean isGroup = (strstr(who, "@g.us") != NULL);
         gchar *text = g_strdup_printf("<img id=\"%u\">", img_id);
-        gowhatsapp_display_text_message(account, (char *)who, (char *)who, text, time(NULL), isGroup, TRUE, NULL, PURPLE_MESSAGE_IMAGES, NULL, FALSE);
+        /* Sender and conversation are two different things, and in a group chat they are never the
+         * same. Passing the chat as the sender labelled our own picture with the group's raw
+         * identifier, "120363...@g.us", where every other message we send shows our name. The account
+         * name is also what gowhatsapp_display_text_message compares against to decide that this is an
+         * outgoing message rather than an incoming one. */
+        gowhatsapp_display_text_message(account, purple_account_get_username(account), who, text, time(NULL), isGroup, TRUE, NULL, PURPLE_MESSAGE_IMAGES, NULL, FALSE);
         g_free(text);
         purple_imgstore_unref_by_id(img_id);
     } else {

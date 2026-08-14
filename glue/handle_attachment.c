@@ -336,7 +336,10 @@ static gboolean download_to_temporary_directory(gowhatsapp_message_t *gwamsg) {
 }
 
 void gowhatsapp_handle_attachment(gowhatsapp_message_t *gwamsg) {
-    gboolean inline_mode = purple_strequal(purple_account_get_string(gwamsg->account, GOWHATSAPP_HANDLE_IMAGES_OPTION, GOWHATSAPP_HANDLE_IMAGES_CHOICE_BOTH), GOWHATSAPP_HANDLE_IMAGES_CHOICE_INLINE);
+    /* Default to INLINE, not upstream's BOTH: this line tests for equality with INLINE, so the
+     * fallback decides the behaviour of every account that never set the option. Adium shows
+     * media in the message view, so showing it there is what it should do out of the box. */
+    gboolean inline_mode = purple_strequal(purple_account_get_string(gwamsg->account, GOWHATSAPP_HANDLE_IMAGES_OPTION, GOWHATSAPP_HANDLE_IMAGES_CHOICE_INLINE), GOWHATSAPP_HANDLE_IMAGES_CHOICE_INLINE);
     gboolean is_video = (gwamsg->mimetype != NULL && g_str_has_prefix(gwamsg->mimetype, "video/"));
     // only media the frontend can show: images by the upstream rule, plus voice notes, which Adium plays inline
     gboolean inline_only = inline_mode && (gowhatsapp_attachment_is_inline_image(gwamsg) || gowhatsapp_is_voice_mimetype(gwamsg->mimetype));
