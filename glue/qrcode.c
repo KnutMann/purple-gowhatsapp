@@ -30,34 +30,36 @@ gowhatsapp_display_qrcode(PurpleAccount *account, const char *pairing_code, cons
         PurpleRequestField *string_code = purple_request_field_string_new("pairing_code", "Pairing Code", pairing_code, FALSE);
         purple_request_field_group_add_field(group, string_code);
     }
-    {
-        PurpleRequestField *string_field = purple_request_field_string_new("qr_data", "QR Code Data", qr_data, FALSE);
-        purple_request_field_group_add_field(group, string_field);
-    }
+    /* The string the code encodes is deliberately not shown. There is nothing a person can do with
+     * it: it is not something to type anywhere, it is the same bytes the camera is about to read. */
     {
         PurpleRequestField *image_field = purple_request_field_image_new("qr_image", "QR Code Image", image_data, image_data_len);
         purple_request_field_group_add_field(group, image_field);
     }
 
     const char *username = purple_account_get_username(account);
-    char *secondary = g_strdup_printf("WhatsApp account %s", username); // MEMCHECK: released here
+    /* Worded to match the Signal plug-in's linking dialog, which does the same job. The extra
+     * sentence is the one real difference between the two: WhatsApp offers a code to type as an
+     * alternative to scanning, and without a word about it the number above is a mystery. */
+    const char *secondary = "In WhatsApp, open Settings, then Linked devices, and add a device. "
+                            "This window closes by itself once the phone has finished. "
+                            "Instead of scanning, you can enter the code shown here.";
 
     gowhatsapp_close_qrcode(account);
     purple_request_fields(
         account, /*handle*/
-        "Logon QR Code", /*title*/
-        "Please enter pairing code or scan the QR code", /*primary*/
-        secondary, /*secondary*/
+        "WhatsApp Device Linking", /*title*/
+        "Scan this code with WhatsApp on your phone", /*primary*/
+        (char *)secondary, /*secondary*/
         fields, /*fields*/
-        "OK", G_CALLBACK(null_cb), /*OK*/
-        "Dismiss", G_CALLBACK(dismiss_cb), /*Cancel*/
+        "Hide", G_CALLBACK(null_cb), /*OK*/
+        "Cancel", G_CALLBACK(dismiss_cb), /*Cancel*/
         NULL, /*account*/
         username, /*username*/
         NULL, /*conversation*/
         account /*data*/
     );
-    
-    g_free(secondary);
+
 }
 
 void
