@@ -62,7 +62,10 @@ func (handler *Handler) profile_picture_downloader() {
 		// check the settings for whether the user wants small previews or big original pictures
 		// NOTE: apart from PREVIEW, there is not only ORIGINAL, but also NO.
 		// NO is not accounted for here since in that case, this function should not even be executed.
-		setting := purple_get_string(handler.account, C.GOWHATSAPP_ICONS_OPTION, C.GOWHATSAPP_ICONS_CHOICE_PREVIEW)
+		// The fallback must be the same one the caller in glue/presence.c uses to decide whether to
+		// ask at all. It was PREVIEW here and ORIGINAL there, so an account that had never been told
+		// otherwise asked as if it wanted the full picture and then fetched the thumbnail.
+		setting := purple_get_string(handler.account, C.GOWHATSAPP_ICONS_OPTION, C.GOWHATSAPP_ICONS_CHOICE_ORIGINAL)
 		want_preview := setting == C.GoString(C.GOWHATSAPP_ICONS_CHOICE_PREVIEW)
 		ppi, _ := handler.client.GetProfilePictureInfo(
 			context.TODO(),
