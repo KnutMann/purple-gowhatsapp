@@ -30,6 +30,34 @@ gowhatsapp_handle_presence(PurpleAccount *account, char *remoteJid, char online,
 }
 
 /*
+ * Which resolution a stored picture was fetched at, and whether that is still the wanted one.
+ *
+ * WhatsApp identifies a profile picture by an id which says nothing about its resolution: the
+ * thumbnail and the full picture of the same photograph carry the same one. Sending that id along
+ * with a request therefore gets "unchanged" back whichever resolution is being asked for, so a
+ * thumbnail fetched once would stay a thumbnail for as long as the person keeps the photograph,
+ * no matter what the setting is changed to afterwards.
+ *
+ * Remembering what was fetched settles it. The id is only offered while it still describes what is
+ * wanted; where it does not, the request goes out without one and the server answers with a
+ * picture rather than with "unchanged".
+ *
+ * A picture stored before this was written carries no note of its resolution, which counts as a
+ * mismatch, so the first connection after this change refetches those once and is then quiet again.
+ */
+static void gowhatsapp_remember_picture_type(PurpleAccount *account, PurpleBlistNode *node)
+{
+    purple_blist_node_set_string(node, "picture_type",
+        purple_account_get_string(account, GOWHATSAPP_ICONS_OPTION, GOWHATSAPP_ICONS_CHOICE_ORIGINAL));
+}
+
+static gboolean gowhatsapp_picture_type_still_wanted(PurpleAccount *account, PurpleBlistNode *node)
+{
+    return purple_strequal(purple_account_get_string(account, GOWHATSAPP_ICONS_OPTION, GOWHATSAPP_ICONS_CHOICE_ORIGINAL),
+                           purple_blist_node_get_string(node, "picture_type"));
+}
+
+/*
  * A profile picture has been downloaded.
  * Set icon and store date for caching.
  */
@@ -47,6 +75,7 @@ gowhatsapp_handle_profile_picture(gowhatsapp_message_t *gwamsg)
         purple_buddy_icons_node_set_custom_icon((PurpleBlistNode *)chat, (guchar *)gwamsg->blob, gwamsg->blobsize);
         purple_blist_node_set_string(&chat->node, "picture_id", gwamsg->messageId);
         purple_blist_node_set_string(&chat->node, "picture_date", gwamsg->text);
+        gowhatsapp_remember_picture_type(gwamsg->account, &chat->node);
         return;
     }
 
@@ -57,6 +86,7 @@ gowhatsapp_handle_profile_picture(gowhatsapp_message_t *gwamsg)
     if (buddy != NULL) {
         purple_blist_node_set_string(&buddy->node, "picture_id", gwamsg->messageId);
         purple_blist_node_set_string(&buddy->node, "picture_date", gwamsg->text);
+        gowhatsapp_remember_picture_type(gwamsg->account, &buddy->node);
         // TODO: use purple_buddy_icons_set_account_icon_timestamp instead of saving the time string
         const char *alias = purple_buddy_get_alias(buddy);
         // do not use alias if it is NULL, empty or containing directory separator (characters unfit for use in file-system are not checked or escaped)
@@ -169,8 +199,9 @@ void gowhatsapp_request_chat_profile_picture(PurpleAccount *account, PurpleChat 
         const char *remoteJid = components ? g_hash_table_lookup(components, "name") : NULL;
 
         if (remoteJid != NULL) {
-            const char *picture_id = purple_blist_node_get_string(&chat->node, "picture_id");
-            const char *picture_date = purple_blist_node_get_string(&chat->node, "picture_date");
+            gboolean matches = gowhatsapp_picture_type_still_wanted(account, &chat->node);
+            const char *picture_id = matches ? purple_blist_node_get_string(&chat->node, "picture_id") : NULL;
+            const char *picture_date = matches ? purple_blist_node_get_string(&chat->node, "picture_date") : NULL;
             gowhatsapp_go_request_profile_picture(account, (char *)remoteJid, (char *)picture_date, (char *)picture_id); // cgo does not support const
         }
     }
@@ -180,8 +211,9 @@ void gowhatsapp_request_profile_picture(PurpleAccount *account, PurpleBuddy *bud
     g_return_if_fail(buddy != NULL);
 
     if (!purple_strequal(purple_account_get_string(account, GOWHATSAPP_ICONS_OPTION, GOWHATSAPP_ICONS_CHOICE_ORIGINAL), GOWHATSAPP_ICONS_CHOICE_NO)) {
-        const char *picture_id = purple_blist_node_get_string(&buddy->node, "picture_id");
-        const char *picture_date = purple_blist_node_get_string(&buddy->node, "picture_date");
+        gboolean matches = gowhatsapp_picture_type_still_wanted(account, &buddy->node);
+        const char *picture_id = matches ? purple_blist_node_get_string(&buddy->node, "picture_id") : NULL;
+        const char *picture_date = matches ? purple_blist_node_get_string(&buddy->node, "picture_date") : NULL;
         gowhatsapp_go_request_profile_picture(account, buddy->name, (char *)picture_date, (char *)picture_id); // cgo does not suport const
     }
 }
