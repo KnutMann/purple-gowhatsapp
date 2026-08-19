@@ -256,7 +256,12 @@ func (handler *Handler) handle_message(message *waE2E.Message, info types.Messag
 			text = "[EDIT] " + text
 		}
 		// note: info.PushName always denotes the sender (not the chat)
-		purple_display_text_message(handler.account, info.MessageSource.Chat.ToNonAD().String(), info.MessageSource.IsGroup, false, info.MessageSource.Sender.ToNonAD().String(), &info.PushName, info.Timestamp, text, &info.ID)
+		// Business accounts often have no push name; their verified name stands in.
+		senderName := info.PushName
+		if senderName == "" && info.VerifiedName != nil {
+			senderName = info.VerifiedName.Details.GetVerifiedName()
+		}
+		purple_display_text_message(handler.account, info.MessageSource.Chat.ToNonAD().String(), info.MessageSource.IsGroup, false, info.MessageSource.Sender.ToNonAD().String(), &senderName, info.Timestamp, text, &info.ID)
 	}
 	if !isEdit { // edited messages contain the changed texts, but attachments are absent since they cannot be changed
 		handler.handle_attachment(message, info.ID, info.MessageSource, info.Timestamp)

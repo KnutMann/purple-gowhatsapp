@@ -68,6 +68,14 @@ func (handler *Handler) eventHandler(rawEvt interface{}) {
 		// setting is regarded by whatsmeow internally
 		// no need to forward to purple
 		// TODO: find out how this is related to the PushNameSetting event
+	case *events.BusinessName:
+		log.Infof("%#v", evt)
+		// A verified business told us its name (fired on first contact and on change).
+		// Business accounts often carry no push name, so without this the UI is left
+		// showing the bare JID.
+		if evt.NewBusinessName != "" {
+			purple_update_name(handler.account, evt.JID.ToNonAD().String(), evt.NewBusinessName)
+		}
 	case *events.Connected:
 		// connected – start downloading profile pictures now.
 		go handler.profile_picture_downloader()
@@ -169,7 +177,11 @@ func (handler *Handler) eventHandler(rawEvt interface{}) {
 		info := evt.Info
 		source := info.MessageSource
 		text := fmt.Sprintf("sent an undecryptable %s message. Check the message on your main device.", evt.UnavailableType)
-		purple_display_text_message(handler.account, source.Chat.ToNonAD().String(), source.IsGroup, false, source.Sender.ToNonAD().String(), &info.PushName, info.Timestamp, text, &info.ID)
+		senderName := info.PushName
+		if senderName == "" && info.VerifiedName != nil {
+			senderName = info.VerifiedName.Details.GetVerifiedName()
+		}
+		purple_display_text_message(handler.account, source.Chat.ToNonAD().String(), source.IsGroup, false, source.Sender.ToNonAD().String(), &senderName, info.Timestamp, text, &info.ID)
 	default:
 		log.Warnf("Event type not handled: %#v", rawEvt)
 	}
