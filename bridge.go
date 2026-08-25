@@ -470,6 +470,24 @@ func purple_receipt(account *PurpleAccount, chat string, sender string, isGroup 
 }
 
 /*
+ * This hands a reaction to the C part: sender put emoji onto the message
+ * identified by messageId. An empty emoji means the reaction was removed.
+ */
+func purple_reaction(account *PurpleAccount, chat string, isGroup bool, sender string, messageId string, emoji string, timestamp time.Time) {
+	cmessage := C.struct_gowhatsapp_message{
+		account:   account,
+		msgtype:   C.char(C.gowhatsapp_message_type_reaction),
+		remoteJid: C.CString(chat),
+		senderJid: C.CString(sender),
+		messageId: C.CString(messageId),
+		text:      C.CString(emoji),
+		timestamp: C.time_t(timestamp.Unix()),
+		isGroup:   bool_to_Cchar(isGroup),
+	}
+	C.gowhatsapp_process_message_bridge(cmessage)
+}
+
+/*
  * This will display a system message.
  * For soft errors regarding a specific conversation.
  * Single participants and group chats.
