@@ -118,6 +118,7 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 
 		entries := []historyEntry{}
 		seen := map[string]bool{}
+		var newestFromPhone time.Time
 		for _, historyMsg := range conversation.GetMessages() {
 			webMsg := historyMsg.GetMessage()
 			evt, err := handler.client.ParseWebMessage(chat, webMsg)
@@ -139,13 +140,27 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 				webMsg:    webMsg,
 			})
 			seen[evt.Info.ID] = true
+			if evt.Info.Timestamp.After(newestFromPhone) {
+				newestFromPhone = evt.Info.Timestamp
+			}
 		}
 
-		// the phone sends what lies before the anchor; the anchor itself and
-		// anything newer the cache remembers fills the gap up to the present
+		if len(entries) == 0 {
+			// nothing to show and no gap to fill
+			continue
+		}
+
+		/* The phone answers with what lies before the anchor and stops there, so
+		 * the anchor itself and anything after it is missing from its answer.
+		 * The cache fills exactly that gap, and nothing else: an older message
+		 * the cache happens to hold is one the phone chose not to send, and it
+		 * is not this client's place to overrule that. */
 		for i := range handler.cachedMessages {
 			cached := &handler.cachedMessages[i]
 			if cached.Chat.ToNonAD() != chat.ToNonAD() || seen[cached.ID] {
+				continue
+			}
+			if cached.Timestamp.Before(newestFromPhone) {
 				continue
 			}
 			text := history_text(&cached.Message)
@@ -163,6 +178,11 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 		sort.SliceStable(entries, func(i, j int) bool {
 			return entries[i].timestamp.Before(entries[j].timestamp)
 		})
+
+		// the user asked for a number of messages, so show that many, the newest
+		if wanted := purple_get_int(handler.account, C.GOWHATSAPP_FETCH_HISTORY_OPTION, 0); wanted > 0 && len(entries) > wanted {
+			entries = entries[len(entries)-wanted:]
+		}
 
 		ownJid := handler.client.Store.ID.ToNonAD()
 		for _, entry := range entries {
