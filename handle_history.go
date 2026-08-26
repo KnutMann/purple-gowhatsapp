@@ -107,6 +107,7 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 	}
 	// the phone answers asynchronously or not at all, so say when it did
 	handler.log.Infof("History sync answer for %d conversation(s).", len(data.GetConversations()))
+	ownJid := handler.client.Store.ID.ToNonAD()
 	for _, conversation := range data.GetConversations() {
 		chat, err := types.ParseJID(conversation.GetID())
 		if err != nil {
@@ -130,7 +131,15 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 			if text == "" {
 				continue
 			}
-			sender := handler.lidToPn(evt.Info.Sender, "handling history sender")
+			/* Our own messages name their author in whatever identity the phone
+			 * recorded at the time, which for some is the hidden lid rather than
+			 * the phone number, and no mapping brings that one home: it is our
+			 * own, and the store maps other people's. A room would then seat us
+			 * twice, under two names, one of them a number nobody recognises. */
+			sender := ownJid
+			if !evt.Info.IsFromMe {
+				sender = handler.lidToPn(evt.Info.Sender, "handling history sender")
+			}
 			entries = append(entries, historyEntry{
 				id:        evt.Info.ID,
 				sender:    sender,
@@ -184,7 +193,6 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 			entries = entries[len(entries)-wanted:]
 		}
 
-		ownJid := handler.client.Store.ID.ToNonAD()
 		for _, entry := range entries {
 			var pushName *string
 			if entry.pushName != "" {
