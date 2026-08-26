@@ -102,6 +102,11 @@ int gowhatsapp_send_chat(PurpleConnection *pc, int id, const gchar *message, Pur
 
 // handle_attachment
 void gowhatsapp_handle_attachment(gowhatsapp_message_t *gwamsg);
+
+/* Stamps the system quarantine attribute on a file the plug-in downloaded, so
+ * Gatekeeper interposes on a later open, as it would for a browser download.
+ * Implemented in quarantine.m; a no-op on error, which is only ever logged. */
+void gowhatsapp_quarantine_downloaded_file(const char *local_path);
 char * gowhatsapp_attachment_fill_template(const char *template, time_t timestamp, const char *hash, const char *filename, const char *extension, const char *remote, const char *sender, const char *title, const char *alias, const char *messageid, PurpleMessageFlags flags);
 
 // send_file

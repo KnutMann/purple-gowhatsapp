@@ -13,6 +13,7 @@ add_library(${TARGET_NAME} SHARED
     "blist.c"
     "send_message.c"
     "handle_attachment.c"
+    "quarantine.m"
     "send_file.c"
     "presence.c"
     "options.c"
@@ -34,7 +35,8 @@ if (WIN32 AND CMAKE_C_COMPILER_ID STREQUAL GNU AND CMAKE_C_COMPILER_VERSION VERS
     target_link_options(${TARGET_NAME} PRIVATE "-static-libgcc")
 endif()
 if (APPLE)
-    target_link_libraries(${TARGET_NAME} PRIVATE "-framework CoreFoundation" "-framework Security" resolv)
+    target_link_libraries(${TARGET_NAME} PRIVATE "-framework CoreFoundation" "-framework Security" "-framework Foundation" "-framework CoreServices" resolv)
+    set_source_files_properties("quarantine.m" PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 
     # Adium loads its OWN libpurple and glib from the app bundle. Left at the
     # build-tree paths the linker records, this plug-in would drag in a SECOND

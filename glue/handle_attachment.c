@@ -90,6 +90,7 @@ static void gowhatsapp_display_document_inline(gowhatsapp_message_t *gwamsg) {
     if (error && error[0]) {
         gowhatsapp_display_text_message(gwamsg->account, gwamsg->senderJid, gwamsg->remoteJid, error, gwamsg->timestamp, gwamsg->isGroup, gwamsg->isOutgoing, gwamsg->name, PURPLE_MESSAGE_ERROR, gwamsg->messageId, TRUE);
     } else {
+        gowhatsapp_quarantine_downloaded_file(local_path);
         /* g_filename_to_uri percent-encodes spaces, '#' and '%' - a raw
          * "file://%s" href truncates at the first '#'. The label is markup-
          * escaped because the display call does not escape (final FALSE) and
@@ -123,6 +124,9 @@ static void xfer_init(PurpleXfer *xfer) {
     PurpleAccount *account = purple_xfer_get_account(xfer);
     char *error = gowhatsapp_go_download_attachment(account, (char *)local_file_name, gwamsg->download_handle);
     // NOTE: gowhatsapp_go_delete_handle(gwamsg->download_handle) will be called via xfer_release
+    if (error == NULL || error[0] == 0) {
+        gowhatsapp_quarantine_downloaded_file(local_file_name);
+    }
     if (error && error[0]) {
         purple_xfer_error(purple_xfer_get_type(xfer), account, xfer->who, error); 
         purple_xfer_cancel_local(xfer);
@@ -309,6 +313,7 @@ void download_to_templated_destination(gowhatsapp_message_t *gwamsg, const char 
     if (error && error[0]) {
         gowhatsapp_display_text_message(gwamsg->account, gwamsg->senderJid, gwamsg->remoteJid, error, gwamsg->timestamp, gwamsg->isGroup, gwamsg->isOutgoing, gwamsg->name, PURPLE_MESSAGE_ERROR, gwamsg->messageId, TRUE);
     } else {
+        gowhatsapp_quarantine_downloaded_file(local_path);
         #ifndef WIN32
             if (purple_account_get_bool(gwamsg->account, GOWHATSAPP_ATTACHMENT_SYMLINK_OPTION, TRUE)) {
                 create_symlinks(gwamsg->account, local_path_template, gwamsg->timestamp, gwamsg->hash_hex, gwamsg->filename, gwamsg->extension, gwamsg->remoteJid, gwamsg->senderJid, chat_alias, buddy_alias, gwamsg->messageId, flags);
@@ -369,6 +374,11 @@ static gboolean download_to_temporary_directory(gowhatsapp_message_t *gwamsg) {
     } else {
         error = gowhatsapp_go_download_attachment(gwamsg->account, local_path_tmp, gwamsg->download_handle);
         gowhatsapp_go_delete_handle(gwamsg->download_handle);
+        if (error == NULL || error[0] == 0) {
+            /* Inline display reads bytes and is not gated by quarantine, but
+             * the kept files can be double-clicked in Finder later. */
+            gowhatsapp_quarantine_downloaded_file(local_path_tmp);
+        }
     }
     gwamsg->download_handle = 0;
 
