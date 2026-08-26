@@ -41,21 +41,28 @@ func (handler *Handler) request_history(chatJid string, count int) {
 		return
 	}
 	handler.historyRequests[chatJid] = time.Now()
-	anchor := handler.newest_cached_message(chat)
-	if anchor == nil {
-		handler.log.Infof("No cached message to anchor a history request for %s on.", chatJid)
-		return
-	}
-	ownJid := handler.client.Store.ID.ToNonAD()
+
+	/* The request points at a message and asks for what came before it. The
+	 * cache supplies that anchor where it can; a conversation nobody has spoken
+	 * in since this client started is not in the cache, and rather than give up
+	 * there the request points at the present moment and names no message. The
+	 * phone decides whether it will answer that. */
 	info := types.MessageInfo{
 		MessageSource: types.MessageSource{
-			Chat:     anchor.Chat,
-			Sender:   anchor.Sender,
-			IsFromMe: anchor.Sender.ToNonAD() == ownJid,
-			IsGroup:  anchor.Chat.Server == types.GroupServer,
+			Chat:    chat,
+			IsGroup: chat.Server == types.GroupServer,
 		},
-		ID:        anchor.ID,
-		Timestamp: anchor.Timestamp,
+		Timestamp: time.Now(),
+	}
+	if anchor := handler.newest_cached_message(chat); anchor != nil {
+		ownJid := handler.client.Store.ID.ToNonAD()
+		info.Chat = anchor.Chat
+		info.Sender = anchor.Sender
+		info.IsFromMe = anchor.Sender.ToNonAD() == ownJid
+		info.ID = anchor.ID
+		info.Timestamp = anchor.Timestamp
+	} else {
+		handler.log.Infof("Requesting history for %s with no anchor message; the cache knows none.", chatJid)
 	}
 	request := handler.client.BuildHistorySyncRequest(&info, count)
 	go func() {
@@ -98,6 +105,8 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 	if handler.client.Store.ID == nil {
 		return
 	}
+	// the phone answers asynchronously or not at all, so say when it did
+	handler.log.Infof("History sync answer for %d conversation(s).", len(data.GetConversations()))
 	for _, conversation := range data.GetConversations() {
 		chat, err := types.ParseJID(conversation.GetID())
 		if err != nil {
