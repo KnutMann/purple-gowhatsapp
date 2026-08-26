@@ -95,6 +95,7 @@ func login(account *PurpleAccount, purple_user_dir string, username string, cred
 	 * can take on-demand history will not be sent any. See handle_history.go. */
 	store.DeviceProps.HistorySyncConfig.FullSyncDaysLimit = proto.Uint32(1)
 	store.DeviceProps.HistorySyncConfig.FullSyncSizeMbLimit = proto.Uint32(1)
+	store.DeviceProps.HistorySyncConfig.StorageQuotaMb = proto.Uint32(1) // the limit upstream pinned; replacing the struct had dropped it
 	store.DeviceProps.HistorySyncConfig.OnDemandReady = proto.Bool(true)
 
 	// find device (and session) information in database

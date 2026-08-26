@@ -34,8 +34,14 @@ import (
  * is nothing to anchor on and the request is skipped.
  */
 func (handler *Handler) request_history(chatJid string, count int) {
-	chat, err := types.ParseJID(chatJid)
-	if err != nil || count <= 0 {
+	if count <= 0 || chatJid == "" {
+		return
+	}
+	// parseJID, not types.ParseJID: purple hands over conversation names like
+	// "+4915112345678", which types.ParseJID would silently read as a bare
+	// server name and the phone would never answer
+	chat, err := parseJID(chatJid)
+	if err != nil {
 		return
 	}
 	if handler.client.Store.ID == nil {
@@ -66,17 +72,18 @@ func (handler *Handler) request_history(chatJid string, count int) {
 		},
 		Timestamp: time.Now(),
 	}
-	if anchor := handler.newest_cached_message(chat); anchor != nil {
+	if anchor := handler.newest_cached_anchor(chat); anchor != nil {
 		/* Everything but the conversation itself comes from the anchor. The
 		 * conversation stays the one that was parsed and asked about: the cache
 		 * records a chat as the message path left it, which for a status
 		 * broadcast is a particular device rather than the conversation, and
 		 * the request goes out with no device suffix trimmed off it. */
 		ownJid := handler.client.Store.ID.ToNonAD()
-		info.Sender = anchor.Sender
-		info.IsFromMe = anchor.Sender.ToNonAD() == ownJid
-		info.ID = anchor.ID
-		info.Timestamp = anchor.Timestamp
+		info.Sender = anchor.sender
+		info.IsFromMe = anchor.sender.ToNonAD() == ownJid
+		info.ID = anchor.id
+		info.Timestamp = anchor.timestamp
+		handler.log.Infof("Requesting history for %s before message %s of %s.", chatJid, anchor.id, anchor.timestamp)
 	} else {
 		handler.log.Infof("Requesting history for %s with no anchor message; the cache knows none.", chatJid)
 	}
@@ -89,33 +96,64 @@ func (handler *Handler) request_history(chatJid string, count int) {
 	}()
 }
 
-/*
- * The cache belongs to the connection's own goroutine, and both callers here
- * reach it from purple's thread, so what they take away is a copy: a pointer
- * into the slice would outlive the next trim.
- */
-func (handler *Handler) newest_cached_message(chat types.JID) *CachedMessage {
+/* What request_history takes away from the newest cached message: scalars
+ * only, copied out under the lock. request_history runs on purple's thread,
+ * so a pointer into the slice would race the next append and trim, and a
+ * whole CachedMessage must never be copied by value, its embedded protobuf
+ * message is marked do-not-copy (the same reason add_to_cache copies
+ * field-by-field). */
+type cachedAnchor struct {
+	id        string
+	sender    types.JID
+	timestamp time.Time
+}
+
+func (handler *Handler) newest_cached_anchor(chat types.JID) *cachedAnchor {
 	handler.cacheMutex.Lock()
 	defer handler.cacheMutex.Unlock()
 	// the cache appends chronologically, so the last match is the newest
 	for i := len(handler.cachedMessages) - 1; i >= 0; i-- {
 		if handler.cachedMessages[i].Chat.ToNonAD() == chat.ToNonAD() {
-			found := handler.cachedMessages[i]
-			return &found
+			return &cachedAnchor{
+				id:        handler.cachedMessages[i].ID,
+				sender:    handler.cachedMessages[i].Sender,
+				timestamp: handler.cachedMessages[i].Timestamp,
+			}
 		}
 	}
 	return nil
 }
 
-// every message the cache holds for one conversation, oldest first
-func (handler *Handler) cached_messages_for(chat types.JID) []CachedMessage {
+/* Candidates the cache can add beyond the phone's answer, gathered under the
+ * lock: scalars plus a pointer at the protobuf message, which is never
+ * copied by value (it is marked do-not-copy) and never mutated in place, so
+ * reading it after the lock is released is safe, also across a trim. The
+ * media-file checks history_line performs stay outside the lock this way. */
+type cachedCandidate struct {
+	id        string
+	sender    types.JID
+	timestamp time.Time
+	message   *waE2E.Message
+}
+
+func (handler *Handler) cache_candidates_for(chat types.JID, seen map[string]bool, notBefore time.Time) []cachedCandidate {
 	handler.cacheMutex.Lock()
 	defer handler.cacheMutex.Unlock()
-	found := []CachedMessage{}
+	found := []cachedCandidate{}
 	for i := range handler.cachedMessages {
-		if handler.cachedMessages[i].Chat.ToNonAD() == chat.ToNonAD() {
-			found = append(found, handler.cachedMessages[i])
+		cached := &handler.cachedMessages[i]
+		if cached.Chat.ToNonAD() != chat.ToNonAD() {
+			continue
 		}
+		if seen[cached.ID] || cached.Timestamp.Before(notBefore) {
+			continue
+		}
+		found = append(found, cachedCandidate{
+			id:        cached.ID,
+			sender:    cached.Sender,
+			timestamp: cached.Timestamp,
+			message:   &cached.Message,
+		})
 	}
 	return found
 }
@@ -243,18 +281,15 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 		 * is not this client's place to overrule that. An answer that brought no
 		 * messages marks no gap, so the cache stays out of it entirely. */
 		if len(entries) > 0 {
-			for _, cached := range handler.cached_messages_for(chat) {
-				if seen[cached.ID] || cached.Timestamp.Before(newestFromPhone) {
-					continue
-				}
-				text, isHTML := history_line(&cached.Message)
+			for _, cached := range handler.cache_candidates_for(chat, seen, newestFromPhone) {
+				text, isHTML := history_line(cached.message)
 				if text == "" {
 					continue
 				}
 				entries = append(entries, historyEntry{
-					id:        cached.ID,
-					sender:    cached.Sender,
-					timestamp: cached.Timestamp,
+					id:        cached.id,
+					sender:    cached.sender,
+					timestamp: cached.timestamp,
 					text:      text,
 					isHTML:    isHTML,
 				})
