@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	_ "github.com/lib/pq"
 	"github.com/mdp/qrterminal/v3"
@@ -159,6 +160,7 @@ func login(account *PurpleAccount, purple_user_dir string, username string, cred
 		client:           whatsmeow.NewClient(device, PurpleLogger(account, "Client")),
 		deferredReceipts: make(map[types.JID]map[types.JID][]types.MessageID),
 		pictureRequests:  make(chan ProfilePictureRequest, 1000), // I hope that no user has more than 1000 contacts
+		historyRequests:  make(map[string]time.Time),
 	}
 	handlers[account] = &handler
 	handler.cacheFilePath = filepath.Join(purple_user_dir, username+".json")

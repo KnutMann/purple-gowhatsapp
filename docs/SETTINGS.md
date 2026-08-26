@@ -35,6 +35,9 @@
     * `text`: as a plain message like "reacted with X to message Y" (default, previous behaviour)
     * `none`: not at all. Front-ends and plug-ins can still draw them by listening to the `gowhatsapp-reaction` signal, which also resolves messages the textual rendering can only call "unknown".
   
+* `fetch-history-on-open` int  
+  Asks the primary device for this many messages preceding the newest known message whenever a conversation comes into being (default: 0, off). The phone answers only while WhatsApp is running on it, and answers asynchronously; there is no error when it does not. The recommended request size is 50. Fetched messages are shown as delayed messages, and the reactions and delivery state the phone remembers for them are reported through the `gowhatsapp-reaction` and `gowhatsapp-receipt` signals. Requires cached messages to anchor on, see `message-cache-size`.
+  
 * `message-cache-size` int  
   Stores a number (default: 0) of messages in local volatile memory. Cached messages are used to provide context when displaying reactions or quoting the message while replying to a specific message. See the [notes](./NOTES.md) for details on how to use the reply feature.  
   Note: Cached messages are persisted to the purple home directory as `username.json`.

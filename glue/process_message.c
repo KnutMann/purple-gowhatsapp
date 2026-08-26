@@ -120,7 +120,11 @@ gowhatsapp_process_message(gowhatsapp_message_t *gwamsg)
             gowhatsapp_close_qrcode(gwamsg->account);
             break;
         case gowhatsapp_message_type_text:
-            if (!gowhatsapp_message_is_old(gwamsg)) {
+            if (gwamsg->subtype == gowhatsapp_text_subtype_history) {
+                // a replay requested from the primary device, not fresh news;
+                // deliberately exempt from the discard-old-messages gate
+                gowhatsapp_display_history_message(gwamsg);
+            } else if (!gowhatsapp_message_is_old(gwamsg)) {
                 gowhatsapp_display_text_message(gwamsg->account, gwamsg->senderJid, gwamsg->remoteJid, gwamsg->text, gwamsg->timestamp, gwamsg->isGroup, gwamsg->isOutgoing, gwamsg->name, 0, gwamsg->messageId, TRUE);
             }
             break;

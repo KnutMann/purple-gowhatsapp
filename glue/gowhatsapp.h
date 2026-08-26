@@ -123,6 +123,10 @@ void gowhatsapp_handle_receipt(PurpleConnection *pc, gowhatsapp_message_t *gwams
 // reactions
 void gowhatsapp_handle_reaction(PurpleConnection *pc, gowhatsapp_message_t *gwamsg);
 
+// history fetched from the primary device
+void gowhatsapp_history_init(PurpleConnection *pc);
+void gowhatsapp_display_history_message(gowhatsapp_message_t *gwamsg);
+
 // commands
 enum gowhatsapp_command {
     GOWHATSAPP_COMMAND_NONE = 0,

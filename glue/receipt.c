@@ -29,9 +29,6 @@ static void conversation_updated(PurpleConversation *conv, PurpleConversationUpd
 }
 
 /*
- * This registers a call-back: This prpl shall be notified every time a conversation is updated.
- */
-/*
  * An incoming receipt: one station of one message's life (sent, delivered,
  * read, read_self – see gowhatsapp_receipt_type in bridge.h).
  *

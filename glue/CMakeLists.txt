@@ -18,6 +18,7 @@ add_library(${TARGET_NAME} SHARED
     "options.c"
     "receipt.c"
     "reaction.c"
+    "history.c"
     "pixbuf.c"
     "pixbuf.h"
     "commands.c"
