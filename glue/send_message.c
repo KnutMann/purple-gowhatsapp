@@ -8,7 +8,7 @@ send_message(PurpleConnection *pc, const gchar *who, const gchar *message, gbool
         // Bridge Mode: Spectrum allegedly does not do HTML and bitlbee is probably plain-text anyways, so use message as it is, preserving new-lines
         // see https://github.com/hoehermann/purple-gowhatsapp/issues/257
         msg = g_strdup(message);
-    } {
+    } else {
         // Strip HTML similar to these reasons: https://github.com/majn/telegram-purple/issues/12 and https://github.com/majn/telegram-purple/commit/fffe7519d7269cf4e5029a65086897c77f5283ac
         // Note: This turns newlines into spaces and <br> tags into newlines
         msg = purple_markup_strip_html(message);
