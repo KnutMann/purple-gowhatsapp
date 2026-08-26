@@ -3,6 +3,23 @@
 #include "libwhatsmeow.h"
 
 static gulong conversation_created_signal = 0;
+static int requests_suppressed = 0;
+
+/*
+ * Displaying a message brings its conversation into being if it did not exist,
+ * which would otherwise read as "the user just opened this" and pull a heap of
+ * old messages in underneath the new one. Requests are held during a display
+ * for that reason, and it is the same guard that keeps the history we fetch
+ * from asking for more history.
+ */
+void
+gowhatsapp_history_suppress_requests(gboolean suppress) {
+    if (suppress) {
+        requests_suppressed++;
+    } else if (requests_suppressed > 0) {
+        requests_suppressed--;
+    }
+}
 
 /*
  * A message the primary device sent back in answer to a history request.
@@ -31,6 +48,10 @@ gowhatsapp_display_history_message(gowhatsapp_message_t *gwamsg) {
  */
 static void conversation_created(PurpleConversation *conv, gpointer data) {
     PurpleAccount *account = purple_conversation_get_account(conv);
+    if (requests_suppressed) {
+        // a message brought this conversation into being, not the user
+        return;
+    }
     if (!purple_strequal(purple_account_get_protocol_id(account), GOWHATSAPP_PRPL_ID)) {
         return;
     }

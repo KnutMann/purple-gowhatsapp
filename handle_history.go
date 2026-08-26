@@ -32,6 +32,10 @@ func (handler *Handler) request_history(chatJid string, count int) {
 	if err != nil || count <= 0 {
 		return
 	}
+	if handler.client.Store.ID == nil {
+		// not linked to a phone yet, so there is nobody to ask
+		return
+	}
 	if last, ok := handler.historyRequests[chatJid]; ok && time.Since(last) < time.Minute {
 		// a conversation being re-created in quick succession is not a new request
 		return
@@ -91,6 +95,9 @@ type historyEntry struct {
  * or read confirmations for own messages.
  */
 func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
+	if handler.client.Store.ID == nil {
+		return
+	}
 	for _, conversation := range data.GetConversations() {
 		chat, err := types.ParseJID(conversation.GetID())
 		if err != nil {
