@@ -50,6 +50,7 @@ if (APPLE)
             -change "${PURPLE_LIBRARY_DIRS}/libglib-2.0.0.dylib" "@executable_path/../Frameworks/libglib.framework/Versions/2.0.0/libglib"
             -change "${PURPLE_LIBRARY_DIRS}/libgobject-2.0.0.dylib" "@executable_path/../Frameworks/libgobject.framework/Versions/2.0.0/libgobject"
             -change "/opt/homebrew/opt/gettext/lib/libintl.8.dylib" "@executable_path/../Frameworks/libintl.framework/Versions/8/libintl"
+            -change "/opt/homebrew/opt/gdk-pixbuf/lib/libgdk_pixbuf-2.0.0.dylib" "@executable_path/../Frameworks/libgdk_pixbuf-2.0.0.dylib"
             "$<TARGET_FILE:${TARGET_NAME}>"
         COMMAND codesign --force --sign - "$<TARGET_FILE:${TARGET_NAME}>"
         COMMENT "Pointing ${TARGET_NAME} at the app bundle's libpurple and glib, then signing")
