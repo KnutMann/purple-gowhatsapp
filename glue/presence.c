@@ -103,9 +103,12 @@ gowhatsapp_handle_profile_picture(gowhatsapp_message_t *gwamsg)
         char *local_file_path = gowhatsapp_attachment_fill_template(local_path_template, timestamp, hash, "profile", ".jpg", gwamsg->remoteJid, gwamsg->remoteJid, buddy_alias, buddy_alias, gwamsg->messageId, PURPLE_MESSAGE_RECV);
         char *local_directory = g_path_get_dirname(local_file_path);
         if (0 == g_mkdir_with_parents(local_directory, 0755)) {
-            GError* error;
-            gboolean success = g_file_set_contents(local_file_path, gwamsg->blob, gwamsg->blobsize, &error);
-            // success not checked, errors ignored silently
+            /* must start as NULL: g_file_set_contents refuses a non-NULL *error
+             * outright, and stack garbage here skipped the write at random */
+            GError* error = NULL;
+            g_file_set_contents(local_file_path, gwamsg->blob, gwamsg->blobsize, &error);
+            // failure is ignored deliberately; the profile picture returns
+            g_clear_error(&error);
         }
         g_free(local_directory);
         g_free(local_file_path);
