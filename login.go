@@ -169,6 +169,10 @@ func login(account *PurpleAccount, purple_user_dir string, username string, cred
 	handler.cacheFilePath = filepath.Join(purple_user_dir, username+".json")
 	handler.LoadCachedMessages(handler.cacheFilePath)
 	handler.client.AddEventHandler(handler.eventHandler)
+	// When a message cannot be decrypted (stale Signal session, missing sender key),
+	// ask the primary phone to resend it instead of leaving the user with a notice
+	// telling them to check their main device. See https://github.com/hoehermann/purple-gowhatsapp/issues/239.
+	handler.client.AutomaticMessageRerequestFromPhone = true
 
 	if proxy_address != "" {
 		handler.client.SetProxyAddress(proxy_address)
