@@ -31,10 +31,13 @@ gowhatsapp_history_suppress_requests(gboolean suppress) {
  */
 void
 gowhatsapp_display_history_message(gowhatsapp_message_t *gwamsg) {
+    /* A media replay arrives as ready-made HTML - a link at a file the live
+     * path already downloaded - and must not be escaped into visible tags. */
+    gboolean escape = (gwamsg->subtype != gowhatsapp_text_subtype_history_html);
     gowhatsapp_display_text_message(
         gwamsg->account, gwamsg->senderJid, gwamsg->remoteJid, gwamsg->text,
         gwamsg->timestamp, gwamsg->isGroup, FALSE, gwamsg->name,
-        PURPLE_MESSAGE_DELAYED, gwamsg->messageId, TRUE
+        PURPLE_MESSAGE_DELAYED, gwamsg->messageId, escape
     );
 }
 

@@ -465,11 +465,15 @@ func purple_display_text_message(account *PurpleAccount, remoteJid string, isGro
  * It travels the same path as a live text message, but marked as history so
  * the C part shows it as a delayed replay instead of fresh news.
  */
-func purple_display_history_message(account *PurpleAccount, remoteJid string, isGroup bool, senderJid string, pushName *string, timestamp time.Time, text string, id string) {
+func purple_display_history_message(account *PurpleAccount, remoteJid string, isGroup bool, senderJid string, pushName *string, timestamp time.Time, text string, id string, isHTML bool) {
+	subtype := C.char(C.gowhatsapp_text_subtype_history)
+	if isHTML {
+		subtype = C.char(C.gowhatsapp_text_subtype_history_html)
+	}
 	cmessage := C.struct_gowhatsapp_message{
 		account:   account,
 		msgtype:   C.char(C.gowhatsapp_message_type_text),
-		subtype:   C.char(C.gowhatsapp_text_subtype_history),
+		subtype:   subtype,
 		remoteJid: C.CString(remoteJid),
 		senderJid: C.CString(senderJid),
 		messageId: C.CString(id),

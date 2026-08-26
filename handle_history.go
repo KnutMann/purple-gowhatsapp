@@ -8,8 +8,13 @@ import "C"
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
+	"html"
+	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"go.mau.fi/whatsmeow/proto/waE2E"
@@ -121,6 +126,7 @@ type historyEntry struct {
 	sender    types.JID
 	timestamp time.Time
 	text      string
+	isHTML    bool // the text is a ready-made media link, not prose to escape
 	pushName  string
 	webMsg    *waWeb.WebMessageInfo // nil for entries replayed from the cache
 }
@@ -192,7 +198,7 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 				continue
 			}
 
-			text := history_text(evt.Message)
+			text, isHTML := history_line(evt.Message)
 			if text == "" {
 				unshowable++
 				continue
@@ -213,6 +219,7 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 				sender:    sender,
 				timestamp: evt.Info.Timestamp,
 				text:      text,
+				isHTML:    isHTML,
 				pushName:  evt.Info.PushName,
 				webMsg:    webMsg,
 			})
@@ -236,7 +243,7 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 				if seen[cached.ID] || cached.Timestamp.Before(newestFromPhone) {
 					continue
 				}
-				text := history_text(&cached.Message)
+				text, isHTML := history_line(&cached.Message)
 				if text == "" {
 					continue
 				}
@@ -245,6 +252,7 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 					sender:    cached.Sender,
 					timestamp: cached.Timestamp,
 					text:      text,
+					isHTML:    isHTML,
 				})
 			}
 		}
@@ -264,7 +272,7 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 				name := entry.pushName
 				pushName = &name
 			}
-			purple_display_history_message(handler.account, chat.ToNonAD().String(), isGroup, entry.sender.ToNonAD().String(), pushName, entry.timestamp, entry.text, entry.id)
+			purple_display_history_message(handler.account, chat.ToNonAD().String(), isGroup, entry.sender.ToNonAD().String(), pushName, entry.timestamp, entry.text, entry.id, entry.isHTML)
 		}
 		for _, entry := range entries {
 			if entry.webMsg == nil {
@@ -327,6 +335,62 @@ func (handler *Handler) report_history_state(chat types.JID, isGroup bool, ownJi
 		}
 		purple_receipt(handler.account, chatJid, ownJid.ToNonAD().String(), isGroup, entry.timestamp, receiptType, entry.id)
 	}
+}
+
+/*
+ * The line a historical message displays as, preferring substance over a
+ * placeholder: where the live path already downloaded the attachment - videos
+ * and images stay in the temporary directory under content-hash names, voice
+ * notes leave their decoded WAV there - the line becomes the same media link
+ * the live message showed, and the front-end swaps it for a player or a
+ * picture again. Where no file is lying around (never received live, or the
+ * directory was cleaned), the plain placeholder stands as before.
+ *
+ * The link is ready-made HTML and says so, since everything else this file
+ * emits is prose for the display path to escape.
+ */
+func history_line(message *waE2E.Message) (string, bool) {
+	if link := history_media_link(message); link != "" {
+		return link, true
+	}
+	return history_text(message), false
+}
+
+// the media file the live path would have left behind for this message, or ""
+func history_media_file(message *waE2E.Message) (path string, label string, caption string) {
+	if m := message.GetVideoMessage(); m != nil && len(m.GetFileSHA256()) > 0 {
+		name := "AdiumVideo_" + hex.EncodeToString(m.GetFileSHA256()) + extension_from_mimetype(m.Mimetype)
+		return filepath.Join(os.TempDir(), name), "Video message", m.GetCaption()
+	}
+	if m := message.GetPtvMessage(); m != nil && len(m.GetFileSHA256()) > 0 {
+		name := "AdiumVideo_" + hex.EncodeToString(m.GetFileSHA256()) + extension_from_mimetype(m.Mimetype)
+		return filepath.Join(os.TempDir(), name), "Video message", m.GetCaption()
+	}
+	if m := message.GetAudioMessage(); m != nil && len(m.GetFileSHA256()) > 0 {
+		name := "AdiumVoice_" + hex.EncodeToString(m.GetFileSHA256()) + ".wav"
+		return filepath.Join(os.TempDir(), name), "Voice message", ""
+	}
+	if m := message.GetImageMessage(); m != nil && len(m.GetFileSHA256()) > 0 {
+		name := "whatsapp_image_" + hex.EncodeToString(m.GetFileSHA256()) + extension_from_mimetype(m.Mimetype)
+		return filepath.Join(os.TempDir(), name), "Image", m.GetCaption()
+	}
+	return "", "", ""
+}
+
+func history_media_link(message *waE2E.Message) string {
+	path, label, caption := history_media_file(message)
+	if path == "" {
+		return ""
+	}
+	if _, err := os.Stat(path); err != nil {
+		return ""
+	}
+	link := fmt.Sprintf("<a href=\"file://%s\">%s</a>", path, label)
+	if caption != "" {
+		//The caption is the sender's text and must not become markup
+		link += " " + strings.ReplaceAll(html.EscapeString(caption), "\n", "<br>")
+	}
+	return link
 }
 
 /*

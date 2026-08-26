@@ -335,6 +335,12 @@ static void gowhatsapp_display_video_inline(gowhatsapp_message_t *gwamsg, const 
 
 static gboolean download_to_temporary_directory(gowhatsapp_message_t *gwamsg) {
     const gboolean is_video = gowhatsapp_is_video_mimetype(gwamsg->mimetype);
+    const gboolean is_voice = gowhatsapp_is_voice_mimetype(gwamsg->mimetype);
+    /* Videos and images stay on disk under their content-hash names: a history
+     * replay looks exactly there and shows the media again instead of a
+     * placeholder. The voice note's downloaded Opus is the one file removed,
+     * because what playback and replay use is the decoded WAV beside it. */
+    const gboolean keep = !is_voice;
     gchar *base;
     if (is_video) {
         //The name is the contract with the message view; see gowhatsapp_display_video_inline
@@ -346,7 +352,7 @@ static gboolean download_to_temporary_directory(gowhatsapp_message_t *gwamsg) {
     g_free(base);
 
     char *error = NULL;
-    if (is_video && g_file_test(local_path_tmp, G_FILE_TEST_EXISTS)) {
+    if (keep && g_file_test(local_path_tmp, G_FILE_TEST_EXISTS)) {
         //The very same bytes, by content hash; no need to fetch them twice
         gowhatsapp_go_delete_handle(gwamsg->download_handle);
     } else {
@@ -358,7 +364,7 @@ static gboolean download_to_temporary_directory(gowhatsapp_message_t *gwamsg) {
     if (error && error[0]) {
         gowhatsapp_display_text_message(gwamsg->account, gwamsg->senderJid, gwamsg->remoteJid, error, gwamsg->timestamp, gwamsg->isGroup, gwamsg->isOutgoing, gwamsg->name, PURPLE_MESSAGE_ERROR, gwamsg->messageId, TRUE);
     } else {
-        if (gowhatsapp_is_voice_mimetype(gwamsg->mimetype)) {
+        if (is_voice) {
             gowhatsapp_display_audio_inline(gwamsg, local_path_tmp);
         } else if (is_video) {
             gowhatsapp_display_video_inline(gwamsg, local_path_tmp);
@@ -367,8 +373,7 @@ static gboolean download_to_temporary_directory(gowhatsapp_message_t *gwamsg) {
         }
         gowhatsapp_display_caption(gwamsg);
     }
-    if (!is_video) {
-        //The player needs its file; images are in the imgstore by now, voice notes in their WAV
+    if (!keep) {
         g_remove(local_path_tmp);
     }
     g_free(error);

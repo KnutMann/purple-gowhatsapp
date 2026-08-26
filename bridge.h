@@ -73,6 +73,9 @@ enum gowhatsapp_receipt_type {
 enum gowhatsapp_text_subtype {
     gowhatsapp_text_subtype_live = 0,
     gowhatsapp_text_subtype_history,
+    /* a history line whose text is ready-made HTML (a media link pointing at a
+     * file the live path already downloaded); displayed without escaping */
+    gowhatsapp_text_subtype_history_html,
 };
 
 // Structure to communicate go → purple.

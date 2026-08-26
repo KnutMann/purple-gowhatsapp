@@ -135,7 +135,8 @@ gowhatsapp_process_message(gowhatsapp_message_t *gwamsg)
             gowhatsapp_close_qrcode(gwamsg->account);
             break;
         case gowhatsapp_message_type_text:
-            if (gwamsg->subtype == gowhatsapp_text_subtype_history) {
+            if (gwamsg->subtype == gowhatsapp_text_subtype_history ||
+                gwamsg->subtype == gowhatsapp_text_subtype_history_html) {
                 // a replay requested from the primary device, not fresh news;
                 // deliberately exempt from the discard-old-messages gate
                 gowhatsapp_display_history_message(gwamsg);
