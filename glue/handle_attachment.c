@@ -317,22 +317,63 @@ void download_to_templated_destination(gowhatsapp_message_t *gwamsg, const char 
     g_free(local_path);
 }
 
+static gboolean gowhatsapp_is_video_mimetype(const char *mimetype) {
+    return mimetype != NULL && g_str_has_prefix(mimetype, "video/");
+}
+
+/* Videos play right in the message view: the file is kept in the temporary
+ * directory (the same place the voice notes' WAVs live, which the view already
+ * reads from) and announced as a file link the view swaps for a player - the
+ * same convention as voice notes, told apart by the AdiumVideo_ name. The
+ * sender stays the real sender, so a video of one's own reads as one's own and
+ * a video in a group names the person, not the group. */
+static void gowhatsapp_display_video_inline(gowhatsapp_message_t *gwamsg, const char *local_file_path) {
+    gchar *text = g_strdup_printf("<a href=\"file://%s\">Video message</a>", local_file_path);
+    gowhatsapp_display_text_message(gwamsg->account, gwamsg->senderJid, gwamsg->remoteJid, text, gwamsg->timestamp, gwamsg->isGroup, gwamsg->isOutgoing, gwamsg->name, 0, gwamsg->messageId, FALSE);
+    g_free(text);
+}
+
 static gboolean download_to_temporary_directory(gowhatsapp_message_t *gwamsg) {
-    char *local_path_tmp = g_strdup(g_build_filename(g_get_tmp_dir(), g_strdup_printf("whatsapp_image_%s%s", gwamsg->hash_hex, gwamsg->extension), NULL));
-    char *error = gowhatsapp_go_download_attachment(gwamsg->account, local_path_tmp, gwamsg->download_handle);
-    gowhatsapp_go_delete_handle(gwamsg->download_handle);
+    const gboolean is_video = gowhatsapp_is_video_mimetype(gwamsg->mimetype);
+    gchar *base;
+    if (is_video) {
+        //The name is the contract with the message view; see gowhatsapp_display_video_inline
+        base = g_strdup_printf("AdiumVideo_%s%s", gwamsg->hash_hex, gwamsg->extension);
+    } else {
+        base = g_strdup_printf("whatsapp_image_%s%s", gwamsg->hash_hex, gwamsg->extension);
+    }
+    char *local_path_tmp = g_build_filename(g_get_tmp_dir(), base, NULL);
+    g_free(base);
+
+    char *error = NULL;
+    if (is_video && g_file_test(local_path_tmp, G_FILE_TEST_EXISTS)) {
+        //The very same bytes, by content hash; no need to fetch them twice
+        gowhatsapp_go_delete_handle(gwamsg->download_handle);
+    } else {
+        error = gowhatsapp_go_download_attachment(gwamsg->account, local_path_tmp, gwamsg->download_handle);
+        gowhatsapp_go_delete_handle(gwamsg->download_handle);
+    }
+    gwamsg->download_handle = 0;
+
     if (error && error[0]) {
         gowhatsapp_display_text_message(gwamsg->account, gwamsg->senderJid, gwamsg->remoteJid, error, gwamsg->timestamp, gwamsg->isGroup, gwamsg->isOutgoing, gwamsg->name, PURPLE_MESSAGE_ERROR, gwamsg->messageId, TRUE);
     } else {
         if (gowhatsapp_is_voice_mimetype(gwamsg->mimetype)) {
             gowhatsapp_display_audio_inline(gwamsg, local_path_tmp);
+        } else if (is_video) {
+            gowhatsapp_display_video_inline(gwamsg, local_path_tmp);
         } else {
             gowhatsapp_display_image_inline(gwamsg, local_path_tmp);
         }
         gowhatsapp_display_caption(gwamsg);
     }
-    g_remove(local_path_tmp);
+    if (!is_video) {
+        //The player needs its file; images are in the imgstore by now, voice notes in their WAV
+        g_remove(local_path_tmp);
+    }
+    g_free(error);
     g_free(local_path_tmp);
+    return TRUE;
 }
 
 void gowhatsapp_handle_attachment(gowhatsapp_message_t *gwamsg) {
@@ -340,12 +381,15 @@ void gowhatsapp_handle_attachment(gowhatsapp_message_t *gwamsg) {
      * fallback decides the behaviour of every account that never set the option. Adium shows
      * media in the message view, so showing it there is what it should do out of the box. */
     gboolean inline_mode = purple_strequal(purple_account_get_string(gwamsg->account, GOWHATSAPP_HANDLE_IMAGES_OPTION, GOWHATSAPP_HANDLE_IMAGES_CHOICE_INLINE), GOWHATSAPP_HANDLE_IMAGES_CHOICE_INLINE);
-    gboolean is_video = (gwamsg->mimetype != NULL && g_str_has_prefix(gwamsg->mimetype, "video/"));
-    // only media the frontend can show: images by the upstream rule, plus voice notes, which Adium plays inline
-    gboolean inline_only = inline_mode && (gowhatsapp_attachment_is_inline_image(gwamsg) || gowhatsapp_is_voice_mimetype(gwamsg->mimetype));
+    // media the frontend can show right in the view: images by the upstream
+    // rule, voice notes as players, and videos as players too - the transfer
+    // prompt is what used to make a video an accept-first file from the group
+    gboolean inline_only = inline_mode && (gowhatsapp_attachment_is_inline_image(gwamsg)
+                                           || gowhatsapp_is_voice_mimetype(gwamsg->mimetype)
+                                           || gowhatsapp_is_video_mimetype(gwamsg->mimetype));
     if (inline_only) {
         download_to_temporary_directory(gwamsg);
-    } else if (inline_mode && !is_video) {
+    } else if (inline_mode) {
         gowhatsapp_display_document_inline(gwamsg);
         gowhatsapp_display_caption(gwamsg);
     } else {
