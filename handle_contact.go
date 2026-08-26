@@ -53,7 +53,7 @@ func contact_card_text(m *waE2E.ContactMessage) string {
 func vcard_telephone_numbers(vcard string) []string {
 	numbers := []string{}
 	for _, line := range vcard_unfold(vcard) {
-		property, value, found := strings.Cut(line, ":")
+		property, value, found := cut_outside_quotes(line, ':')
 		if !found || value == "" {
 			continue
 		}
@@ -66,6 +66,24 @@ func vcard_telephone_numbers(vcard string) []string {
 		}
 	}
 	return numbers
+}
+
+// The value starts at the first separator outside double quotes: RFC 2426
+// allows colons inside quoted parameter values (TEL;TYPE="work:main":+49...),
+// so a plain cut at the first colon would start the value inside the quotes.
+func cut_outside_quotes(line string, separator byte) (string, string, bool) {
+	quoted := false
+	for i := 0; i < len(line); i++ {
+		switch line[i] {
+		case '"':
+			quoted = !quoted
+		case separator:
+			if !quoted {
+				return line[:i], line[i+1:], true
+			}
+		}
+	}
+	return line, "", false
 }
 
 // vCard 3.0 folds long lines by continuing them after CRLF plus one space or
