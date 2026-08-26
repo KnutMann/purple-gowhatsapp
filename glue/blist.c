@@ -21,9 +21,51 @@ void gowhatsapp_assume_buddy_away(PurpleAccount *account, PurpleBuddy *buddy) {
 }
 
 /*
+ * A contact can end up in the list twice: this plug-in files every contact
+ * under its own "Whatsapp" group, and a front-end adding the same contact to
+ * a group the user chose may create a second node instead of moving ours
+ * (issue #215 observes the result). Two nodes for one JID split presence,
+ * icon and alias bookkeeping between them. The moment the same JID exists
+ * outside the automatic group, the automatic node has been superseded:
+ * remove it and keep the user's. Removal is local only, which is all there
+ * is, WhatsApp has no server-side roster.
+ */
+static PurpleBuddy * gowhatsapp_supersede_automatic_group_node(PurpleAccount *account, const char *identifier) {
+    /* purple_find_buddies with an empty name returns every buddy of the
+     * account; without this guard an empty identifier would read as "all of
+     * the automatic group has been superseded" and delete it wholesale. */
+    if (identifier == NULL || identifier[0] == 0) {
+        return NULL;
+    }
+    PurpleGroup *automatic_group = purple_find_group("Whatsapp");
+    if (automatic_group == NULL) {
+        return NULL;
+    }
+    PurpleBuddy *keep = NULL;
+    GSList *automatic_nodes = NULL;
+    GSList *buddies = purple_find_buddies(account, identifier);
+    while (buddies != NULL) {
+        PurpleBuddy *buddy = buddies->data;
+        if (purple_buddy_get_group(buddy) == automatic_group) {
+            automatic_nodes = g_slist_prepend(automatic_nodes, buddy);
+        } else if (keep == NULL) {
+            keep = buddy;
+        }
+        buddies = g_slist_delete_link(buddies, buddies);
+    }
+    while (automatic_nodes != NULL) {
+        if (keep != NULL) {
+            purple_blist_remove_buddy(automatic_nodes->data);
+        }
+        automatic_nodes = g_slist_delete_link(automatic_nodes, automatic_nodes);
+    }
+    return keep;
+}
+
+/*
  * Ensure buddy in the buddy list.
  * Updates alias non-destructively.
- * 
+ *
  * identifier is the username (purple who)
  * name is the human readable name (purple alias).
  */
@@ -40,7 +82,10 @@ PurpleBuddy * gowhatsapp_ensure_buddy_in_blist(PurpleAccount *account, const cha
         return NULL;
     }
 
-    PurpleBuddy *buddy = purple_blist_find_buddy(account, identifier);
+    PurpleBuddy *buddy = gowhatsapp_supersede_automatic_group_node(account, identifier);
+    if (buddy == NULL) {
+        buddy = purple_blist_find_buddy(account, identifier);
+    }
 
     if (!buddy) {
         PurpleGroup *group = gowhatsapp_get_purple_group();
