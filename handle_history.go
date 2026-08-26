@@ -93,6 +93,14 @@ type historyEntry struct {
 	webMsg    *waWeb.WebMessageInfo // nil for entries replayed from the cache
 }
 
+// a mark to put on one of those lines rather than a line of its own
+type historyReaction struct {
+	targetId  string
+	sender    types.JID
+	emoji     string // empty where the reaction was taken back again
+	timestamp time.Time
+}
+
 /*
  * The phone's answer to request_history: conversations full of WebMessageInfo.
  * Each is turned back into a displayable line, merged with what the cache
@@ -118,6 +126,7 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 		isGroup := chat.Server == types.GroupServer
 
 		entries := []historyEntry{}
+		reactions := []historyReaction{}
 		seen := map[string]bool{}
 		var newestFromPhone time.Time
 		for _, historyMsg := range conversation.GetMessages() {
@@ -125,10 +134,6 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 			evt, err := handler.client.ParseWebMessage(chat, webMsg)
 			if err != nil {
 				handler.log.Warnf("Dropping unparseable history message in %s: %v", chat, err)
-				continue
-			}
-			text := history_text(evt.Message)
-			if text == "" {
 				continue
 			}
 			/* Our own messages name their author in whatever identity the phone
@@ -139,6 +144,24 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 			sender := ownJid
 			if !evt.Info.IsFromMe {
 				sender = handler.lidToPn(evt.Info.Sender, "handling history sender")
+			}
+
+			/* A reaction is a message in its own right here, naming the message
+			 * it belongs to. It is not a line to show but a mark to put on one,
+			 * so it is set aside until the lines are on the page. */
+			if rm := evt.Message.GetReactionMessage(); rm != nil && rm.Key != nil && rm.Key.ID != nil {
+				reactions = append(reactions, historyReaction{
+					targetId:  rm.Key.GetID(),
+					sender:    sender,
+					emoji:     rm.GetText(),
+					timestamp: evt.Info.Timestamp,
+				})
+				continue
+			}
+
+			text := history_text(evt.Message)
+			if text == "" {
+				continue
 			}
 			entries = append(entries, historyEntry{
 				id:        evt.Info.ID,
@@ -155,7 +178,8 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 		}
 
 		if len(entries) == 0 {
-			// nothing to show and no gap to fill
+			// nothing to show, and marks with nothing to sit on are no use
+			handler.log.Infof("History for %s held no messages.", chat)
 			continue
 		}
 
@@ -207,6 +231,16 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 			}
 			handler.report_history_state(chat, isGroup, ownJid, entry)
 		}
+
+		/* Oldest first, so that where a reaction was changed or taken back the
+		 * last word is the one that stands. */
+		sort.SliceStable(reactions, func(i, j int) bool {
+			return reactions[i].timestamp.Before(reactions[j].timestamp)
+		})
+		for _, reaction := range reactions {
+			purple_reaction(handler.account, chat.ToNonAD().String(), isGroup, reaction.sender.ToNonAD().String(), reaction.targetId, reaction.emoji, reaction.timestamp)
+		}
+		handler.log.Infof("History for %s: %d message(s), %d reaction(s).", chat, len(entries), len(reactions))
 	}
 }
 
