@@ -73,14 +73,35 @@ func (handler *Handler) request_history(chatJid string, count int) {
 	}()
 }
 
+/*
+ * The cache belongs to the connection's own goroutine, and both callers here
+ * reach it from purple's thread, so what they take away is a copy: a pointer
+ * into the slice would outlive the next trim.
+ */
 func (handler *Handler) newest_cached_message(chat types.JID) *CachedMessage {
+	handler.cacheMutex.Lock()
+	defer handler.cacheMutex.Unlock()
 	// the cache appends chronologically, so the last match is the newest
 	for i := len(handler.cachedMessages) - 1; i >= 0; i-- {
 		if handler.cachedMessages[i].Chat.ToNonAD() == chat.ToNonAD() {
-			return &handler.cachedMessages[i]
+			found := handler.cachedMessages[i]
+			return &found
 		}
 	}
 	return nil
+}
+
+// every message the cache holds for one conversation, oldest first
+func (handler *Handler) cached_messages_for(chat types.JID) []CachedMessage {
+	handler.cacheMutex.Lock()
+	defer handler.cacheMutex.Unlock()
+	found := []CachedMessage{}
+	for i := range handler.cachedMessages {
+		if handler.cachedMessages[i].Chat.ToNonAD() == chat.ToNonAD() {
+			found = append(found, handler.cachedMessages[i])
+		}
+	}
+	return found
 }
 
 // one conversation line reconstructed from the phone's history or the cache
@@ -189,12 +210,8 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 		 * is not this client's place to overrule that. An answer that brought no
 		 * messages marks no gap, so the cache stays out of it entirely. */
 		if len(entries) > 0 {
-			for i := range handler.cachedMessages {
-				cached := &handler.cachedMessages[i]
-				if cached.Chat.ToNonAD() != chat.ToNonAD() || seen[cached.ID] {
-					continue
-				}
-				if cached.Timestamp.Before(newestFromPhone) {
+			for _, cached := range handler.cached_messages_for(chat) {
+				if seen[cached.ID] || cached.Timestamp.Before(newestFromPhone) {
 					continue
 				}
 				text := history_text(&cached.Message)

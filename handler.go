@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"go.mau.fi/whatsmeow"
@@ -31,6 +32,7 @@ type Handler struct {
 	client           *whatsmeow.Client
 	deferredReceipts map[types.JID]map[types.JID][]types.MessageID // holds ID and sender of a received message so the receipt can be sent later.
 	cachedMessages   []CachedMessage                               // for looking up reactions and quotes
+	cacheMutex       sync.Mutex                                    // cachedMessages is reached from purple's thread as well, see handle_history.go
 	cacheFilePath    string                                        // where cachedMessages are persisted
 	pictureRequests  chan ProfilePictureRequest
 	httpClient       *http.Client // for executing picture requests
