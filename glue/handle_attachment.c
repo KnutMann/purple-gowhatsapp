@@ -70,18 +70,18 @@ static void gowhatsapp_display_document_inline(gowhatsapp_message_t *gwamsg) {
     if (downloads == NULL) {
         downloads = g_get_tmp_dir();
     }
-    gchar *base;
-    if (gwamsg->filename != NULL && gwamsg->filename[0]) {
-        base = g_strdup_printf("%s%s", gwamsg->filename, gwamsg->extension);
-    } else {
-        base = g_strdup_printf("%s%s", gwamsg->hash_hex, gwamsg->extension);
-    }
+    /* Name and extension are chosen by the remote sender; a '/' in either
+     * would let g_build_filename write outside the download directory. */
+    gchar *stem = g_strdup((gwamsg->filename != NULL && gwamsg->filename[0])
+                           ? gwamsg->filename : gwamsg->hash_hex);
+    gchar *ext = g_strdup(gwamsg->extension != NULL ? gwamsg->extension : "");
+    g_strdelimit(stem, "/", '_');
+    g_strdelimit(ext, "/", '_');
+    gchar *base = g_strdup_printf("%s%s", stem, ext);
     gchar *local_path = g_build_filename(downloads, base, NULL);
     for (int i = 2; g_file_test(local_path, G_FILE_TEST_EXISTS) && i < 100; i++) {
         g_free(local_path);
-        gchar *numbered = g_strdup_printf("%s (%d)%s",
-            (gwamsg->filename && gwamsg->filename[0]) ? gwamsg->filename : gwamsg->hash_hex,
-            i, gwamsg->extension);
+        gchar *numbered = g_strdup_printf("%s (%d)%s", stem, i, ext);
         local_path = g_build_filename(downloads, numbered, NULL);
         g_free(numbered);
     }
@@ -90,13 +90,24 @@ static void gowhatsapp_display_document_inline(gowhatsapp_message_t *gwamsg) {
     if (error && error[0]) {
         gowhatsapp_display_text_message(gwamsg->account, gwamsg->senderJid, gwamsg->remoteJid, error, gwamsg->timestamp, gwamsg->isGroup, gwamsg->isOutgoing, gwamsg->name, PURPLE_MESSAGE_ERROR, gwamsg->messageId, TRUE);
     } else {
-        gchar *text = g_strdup_printf("<a href=\"file://%s\">%s</a>", local_path, base);
+        /* g_filename_to_uri percent-encodes spaces, '#' and '%' - a raw
+         * "file://%s" href truncates at the first '#'. The label is markup-
+         * escaped because the display call does not escape (final FALSE) and
+         * the name is sender-chosen. Neither is a trust signal: the message
+         * view re-checks the path natively when the link is clicked. */
+        gchar *uri = g_filename_to_uri(local_path, NULL, NULL);
+        gchar *label = g_markup_escape_text(base, -1);
+        gchar *text = g_strdup_printf("<a href=\"%s\">%s</a>", uri != NULL ? uri : "", label);
         gowhatsapp_display_text_message(gwamsg->account, gwamsg->senderJid, gwamsg->remoteJid, text, gwamsg->timestamp, gwamsg->isGroup, gwamsg->isOutgoing, gwamsg->name, 0, gwamsg->messageId, FALSE);
         g_free(text);
+        g_free(label);
+        g_free(uri);
     }
     g_free(error);
     g_free(local_path);
     g_free(base);
+    g_free(stem);
+    g_free(ext);
 }
 
 static void gowhatsapp_display_caption(gowhatsapp_message_t *gwamsg) {
