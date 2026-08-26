@@ -35,6 +35,24 @@ if (WIN32 AND CMAKE_C_COMPILER_ID STREQUAL GNU AND CMAKE_C_COMPILER_VERSION VERS
 endif()
 if (APPLE)
     target_link_libraries(${TARGET_NAME} PRIVATE "-framework CoreFoundation" "-framework Security" resolv)
+
+    # Adium loads its OWN libpurple and glib from the app bundle. Left at the
+    # build-tree paths the linker records, this plug-in would drag in a SECOND
+    # copy of each and register its protocol there, where the application never
+    # looks: it probes and loads without a single error and WhatsApp simply
+    # never connects. Rewriting the references to the bundle's frameworks makes
+    # it share one instance, like every other bundled protocol plug-in. The
+    # ad-hoc codesign afterwards is what keeps Xcode's copy phase from
+    # stripping the Go runtime out of the binary on its way into the bundle.
+    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+        COMMAND install_name_tool
+            -change "${PURPLE_LIBRARY_DIRS}/libpurple.0.dylib" "@executable_path/../Frameworks/libpurple.framework/Versions/0/libpurple"
+            -change "${PURPLE_LIBRARY_DIRS}/libglib-2.0.0.dylib" "@executable_path/../Frameworks/libglib.framework/Versions/2.0.0/libglib"
+            -change "${PURPLE_LIBRARY_DIRS}/libgobject-2.0.0.dylib" "@executable_path/../Frameworks/libgobject.framework/Versions/2.0.0/libgobject"
+            -change "/opt/homebrew/opt/gettext/lib/libintl.8.dylib" "@executable_path/../Frameworks/libintl.framework/Versions/8/libintl"
+            "$<TARGET_FILE:${TARGET_NAME}>"
+        COMMAND codesign --force --sign - "$<TARGET_FILE:${TARGET_NAME}>"
+        COMMENT "Pointing ${TARGET_NAME} at the app bundle's libpurple and glib, then signing")
 endif()
 
 if (WIN32)
