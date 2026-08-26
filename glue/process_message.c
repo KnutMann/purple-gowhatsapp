@@ -149,6 +149,7 @@ gowhatsapp_process_message(gowhatsapp_message_t *gwamsg)
             break;
         case gowhatsapp_message_type_receipt:
             gowhatsapp_handle_receipt(pc, gwamsg);
+            break;
         case gowhatsapp_message_type_reaction:
             gowhatsapp_handle_reaction(pc, gwamsg);
             break;
