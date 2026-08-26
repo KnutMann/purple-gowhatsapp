@@ -224,6 +224,10 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 				webMsg:    webMsg,
 			})
 			seen[evt.Info.ID] = true
+			/* Into the cache under its id, so replies and reactions can name a
+			 * history line as readily as a live one; ids already cached are
+			 * skipped there, and one persist at the end covers the burst. */
+			handler.add_to_cache_unpersisted(evt.Message, evt.Info.ID, chat, sender, evt.Info.Timestamp)
 			if evt.Info.Timestamp.After(newestFromPhone) {
 				newestFromPhone = evt.Info.Timestamp
 			}
@@ -290,6 +294,7 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 			purple_reaction(handler.account, chat.ToNonAD().String(), isGroup, reaction.sender.ToNonAD().String(), reaction.targetId, reaction.emoji, reaction.timestamp)
 		}
 	}
+	handler.persist_cache()
 }
 
 /*

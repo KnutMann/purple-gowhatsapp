@@ -28,6 +28,16 @@ type CachedMessage struct {
  * Useful for replying to a specific message and for displaying relevant information when dealing with reactions.
  */
 func (handler *Handler) add_to_cache(message *waE2E.Message, id types.MessageID, chat types.JID, sender types.JID, timestamp time.Time) {
+	handler.add_to_cache_unpersisted(message, id, chat, sender, timestamp)
+	handler.persist_cache()
+}
+
+/*
+ * add_to_cache without writing the cache file: for history replay, where
+ * hundreds of additions arrive in one burst and one persist_cache at the end
+ * covers them all.
+ */
+func (handler *Handler) add_to_cache_unpersisted(message *waE2E.Message, id types.MessageID, chat types.JID, sender types.JID, timestamp time.Time) {
 	if message.GetReactionMessage() != nil {
 		// ReactionMessage cannot be referred to, do not cache
 		return
@@ -40,6 +50,13 @@ func (handler *Handler) add_to_cache(message *waE2E.Message, id types.MessageID,
 	}
 	handler.cacheMutex.Lock()
 	defer handler.cacheMutex.Unlock()
+	for i := range handler.cachedMessages {
+		if handler.cachedMessages[i].ID == id {
+			// already known, e.g. a history replay of a cached line; the first
+			// version stands, matching what lookup_cached_message_by_id returns
+			return
+		}
+	}
 	handler.cachedMessages = append(handler.cachedMessages, CachedMessage{
 		// an in-place copy of the message must be created field-by-field due to protobuf demanding exclusive authority or something (mutexes are involved)
 		Message: waE2E.Message{
@@ -51,6 +68,8 @@ func (handler *Handler) add_to_cache(message *waE2E.Message, id types.MessageID,
 			AudioMessage:          message.AudioMessage,
 			StickerMessage:        message.StickerMessage,
 			DocumentMessage:       message.DocumentMessage,
+			ContactMessage:        message.ContactMessage,
+			ContactsArrayMessage:  message.ContactsArrayMessage,
 			PollCreationMessage:   message.PollCreationMessage,
 			PollCreationMessageV2: message.PollCreationMessageV2,
 			PollCreationMessageV3: message.PollCreationMessageV3,
@@ -66,7 +85,12 @@ func (handler *Handler) add_to_cache(message *waE2E.Message, id types.MessageID,
 	if len(handler.cachedMessages) > purple_get_int(handler.account, C.GOWHATSAPP_MESSAGE_CACHE_SIZE_OPTION, 500) {
 		handler.cachedMessages = handler.cachedMessages[1:]
 	}
-	// persist after every addition so the cache survives an unclean shutdown
+}
+
+// write the cache file so the cache survives an unclean shutdown
+func (handler *Handler) persist_cache() {
+	handler.cacheMutex.Lock()
+	defer handler.cacheMutex.Unlock()
 	if handler.cacheFilePath != "" {
 		handler.SaveCachedMessages(handler.cacheFilePath)
 	}
