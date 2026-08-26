@@ -186,7 +186,10 @@ func (handler *Handler) eventHandler(rawEvt interface{}) {
 		if senderName == "" && info.VerifiedName != nil {
 			senderName = info.VerifiedName.Details.GetVerifiedName()
 		}
-		purple_display_text_message(handler.account, source.Chat.ToNonAD().String(), source.IsGroup, false, source.Sender.ToNonAD().String(), &senderName, info.Timestamp, text, &info.ID)
+		// deliberately without the message id: with the automatic rerequest the
+		// real message follows under the same id, and receipts, reactions and
+		// replies must resolve to it, not to this notice
+		purple_display_text_message(handler.account, source.Chat.ToNonAD().String(), source.IsGroup, false, source.Sender.ToNonAD().String(), &senderName, info.Timestamp, text, nil)
 	default:
 		log.Warnf("Event type not handled: %#v", rawEvt)
 	}
