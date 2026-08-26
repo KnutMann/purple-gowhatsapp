@@ -448,6 +448,9 @@ func history_text(message *waE2E.Message) string {
 	if m := GetAnyPollCreationMessage(message); m != nil {
 		return "[POLL] " + m.GetName()
 	}
+	if text := contact_message_text(message); text != "" {
+		return text
+	}
 	/* Everything else, group events and calls and votes among them, has nothing
 	 * to say as a line of conversation and is left out on purpose. */
 	return ""

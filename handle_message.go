@@ -159,6 +159,9 @@ func (handler *Handler) handle_message(message *waE2E.Message, info types.Messag
 					if cached_message.Message.DocumentMessage != nil {
 						message_type = "document"
 					}
+					if cached_message.Message.ContactMessage != nil || cached_message.Message.ContactsArrayMessage != nil {
+						message_type = "contact card"
+					}
 					quote = fmt.Sprintf("%s from %s", message_type, cached_message.Timestamp.Format(time.RFC822))
 				}
 			}
@@ -190,6 +193,7 @@ func (handler *Handler) handle_message(message *waE2E.Message, info types.Messag
 				llm.GetDegreesLatitude(), llm.GetDegreesLongitude())
 		}
 	}
+	text += contact_message_text(message)
 	{
 		pcm := GetAnyPollCreationMessage(message)
 		if pcm != nil {
