@@ -59,6 +59,12 @@ static void conversation_created(PurpleConversation *conv, gpointer data) {
     if (count <= 0) {
         return;
     }
+    PurpleConnection *pc = purple_account_get_connection(account);
+    WhatsappProtocolData *wpd = pc ? (WhatsappProtocolData *)purple_connection_get_protocol_data(pc) : NULL;
+    if (wpd == NULL || wpd->history_requests_from == 0 || time(NULL) < wpd->history_requests_from) {
+        // still settling in after connecting, where conversations appear by themselves
+        return;
+    }
     char *who = (char *)purple_conversation_get_name(conv); // cgo does not suport const
     gowhatsapp_go_request_history(account, who, count); // this does all other checks (e.g. connection state)
 }

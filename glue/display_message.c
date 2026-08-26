@@ -18,9 +18,6 @@ void gowhatsapp_display_text_message(
 
     PurpleConnection * connection = purple_account_get_connection(account);
 
-    // writing below may create the conversation; that is not the user opening it
-    gowhatsapp_history_suppress_requests(TRUE);
-
     if (flags & PURPLE_MESSAGE_SYSTEM) {
         if (senderJid == NULL) {
             senderJid = g_strdup("system"); // g_strdup needed since senderJid is freed by caller
@@ -110,5 +107,4 @@ void gowhatsapp_display_text_message(
     }
     
     g_free(text_with_id);
-    gowhatsapp_history_suppress_requests(FALSE);
 }

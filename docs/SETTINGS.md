@@ -36,7 +36,11 @@
     * `none`: not at all. Front-ends and plug-ins can still draw them by listening to the `gowhatsapp-reaction` signal, which also resolves messages the textual rendering can only call "unknown".
   
 * `fetch-history-on-open` int  
-  Asks the primary device for this many messages preceding the newest known message whenever a conversation comes into being (default: 0, off). The phone answers only while WhatsApp is running on it, and answers asynchronously; there is no error when it does not. The recommended request size is 50. Fetched messages are shown as delayed messages, and the reactions and delivery state the phone remembers for them are reported through the `gowhatsapp-reaction` and `gowhatsapp-receipt` signals. Requires cached messages to anchor on, see `message-cache-size`.
+  Asks the primary device for this many messages preceding the newest one known of a conversation, when the user opens it (default: 0, off). The recommended request size is 50.
+  
+  The phone answers asynchronously, only while WhatsApp is running on it, and it hands out a given stretch of history once: asking again for what has already been delivered is answered with nothing. There is no error in either case, so the plug-in logs what each request and answer contained. Note also that a device announces whether it can receive history on demand while it is being linked, so an account linked by an older version of this plug-in has to be linked again before the phone will answer at all.
+  
+  Fetched messages are shown as delayed messages carrying their ids, and the reactions and delivery state the phone remembers are reported through the `gowhatsapp-reaction` and `gowhatsapp-receipt` signals. Conversations the message cache knows are asked about from the newest message it holds; for the others the request names no message and asks for what came before now, which the phone may or may not answer. See `message-cache-size`.
   
 * `message-cache-size` int  
   Stores a number (default: 0) of messages in local volatile memory. Cached messages are used to provide context when displaying reactions or quoting the message while replying to a specific message. See the [notes](./NOTES.md) for details on how to use the reply feature.  

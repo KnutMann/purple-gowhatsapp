@@ -42,6 +42,8 @@ typedef struct {
     PurpleRoomlist *roomlist;
     // when this connection was established
     time_t connected_at_timestamp;
+    // not before this may a new conversation ask the phone for history, see history.c
+    time_t history_requests_from;
 } WhatsappProtocolData;
 
 // options

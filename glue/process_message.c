@@ -25,9 +25,19 @@ static gboolean gowhatsapp_message_is_old(gowhatsapp_message_t *gwamsg) {
  * 
  * Additionally requests the profile picture of each buddy.
  */
+/* Coming online brings whole conversations into being at once, one per group
+ * where chats are joined automatically, and every one of them would otherwise
+ * read as the user opening it. See glue/history.c. */
+#define GOWHATSAPP_HISTORY_GRACE_SECONDS 15
+
 static void gowhatsapp_connection_set_online(PurpleConnection *connection) {
     PurpleAccount *account = purple_connection_get_account(connection);
+    WhatsappProtocolData *wpd = (WhatsappProtocolData *)purple_connection_get_protocol_data(connection);
     purple_connection_set_state(connection, PURPLE_CONNECTION_CONNECTED);
+
+    if (wpd != NULL) {
+        wpd->history_requests_from = time(NULL) + GOWHATSAPP_HISTORY_GRACE_SECONDS;
+    }
 
     // display all buddies as "away"
     gowhatsapp_for_all_buddies(account, gowhatsapp_assume_buddy_away);
@@ -67,6 +77,11 @@ gowhatsapp_process_message(gowhatsapp_message_t *gwamsg)
     if (!gwamsg->timestamp) {
         gwamsg->timestamp = time(NULL);
     }
+
+    /* Handling a message can bring its conversation into being, whatever kind of
+     * message it is, and that is not the user opening it. See glue/history.c. */
+    gowhatsapp_history_suppress_requests(TRUE);
+
     switch(gwamsg->msgtype) {
         case gowhatsapp_message_type_error:
             if (gwamsg->subtype == 0) {
@@ -161,4 +176,6 @@ gowhatsapp_process_message(gowhatsapp_message_t *gwamsg)
             purple_debug_info(GOWHATSAPP_NAME, "Handling this message type is not implemented.\n");
             g_free(gwamsg->blob);
     }
+
+    gowhatsapp_history_suppress_requests(FALSE);
 }

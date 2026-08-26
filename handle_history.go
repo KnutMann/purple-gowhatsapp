@@ -8,6 +8,7 @@ import "C"
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"time"
 
@@ -40,6 +41,12 @@ func (handler *Handler) request_history(chatJid string, count int) {
 		// a conversation being re-created in quick succession is not a new request
 		return
 	}
+	for jid, when := range handler.historyRequests {
+		// an entry past its minute holds nothing back and need not be kept
+		if time.Since(when) > time.Minute {
+			delete(handler.historyRequests, jid)
+		}
+	}
 	handler.historyRequests[chatJid] = time.Now()
 
 	/* The request points at a message and asks for what came before it. The
@@ -55,8 +62,12 @@ func (handler *Handler) request_history(chatJid string, count int) {
 		Timestamp: time.Now(),
 	}
 	if anchor := handler.newest_cached_message(chat); anchor != nil {
+		/* Everything but the conversation itself comes from the anchor. The
+		 * conversation stays the one that was parsed and asked about: the cache
+		 * records a chat as the message path left it, which for a status
+		 * broadcast is a particular device rather than the conversation, and
+		 * the request goes out with no device suffix trimmed off it. */
 		ownJid := handler.client.Store.ID.ToNonAD()
-		info.Chat = anchor.Chat
 		info.Sender = anchor.Sender
 		info.IsFromMe = anchor.Sender.ToNonAD() == ownJid
 		info.ID = anchor.ID
@@ -185,6 +196,17 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 			if text == "" {
 				unshowable++
 				continue
+			}
+			/* An edited message is parsed under the id of the message it edits,
+			 * which is the right id to carry but would put two lines on the page
+			 * claiming to be the same message. The later one wins. */
+			if seen[evt.Info.ID] {
+				for i := range entries {
+					if entries[i].id == evt.Info.ID {
+						entries = append(entries[:i], entries[i+1:]...)
+						break
+					}
+				}
 			}
 			entries = append(entries, historyEntry{
 				id:        evt.Info.ID,
@@ -340,6 +362,30 @@ func history_text(message *waE2E.Message) string {
 	if m := message.GetDocumentMessage(); m != nil {
 		return history_placeholder("a file: "+m.GetFileName(), m.GetCaption())
 	}
+	/* The kinds the live path spells out in full and this one need only name, so
+	 * that a conversation replayed from the phone has no silent holes in it. */
+	if m := message.GetLocationMessage(); m != nil {
+		label := m.GetName()
+		if label == "" {
+			label = m.GetAddress()
+		}
+		if label == "" {
+			label = "Shared location"
+		}
+		return fmt.Sprintf("%s: https://maps.apple.com/?ll=%f,%f&q=%f,%f", label,
+			m.GetDegreesLatitude(), m.GetDegreesLongitude(),
+			m.GetDegreesLatitude(), m.GetDegreesLongitude())
+	}
+	if m := message.GetLiveLocationMessage(); m != nil {
+		return fmt.Sprintf("Shared live location (last position: https://maps.apple.com/?ll=%f,%f&q=%f,%f)",
+			m.GetDegreesLatitude(), m.GetDegreesLongitude(),
+			m.GetDegreesLatitude(), m.GetDegreesLongitude())
+	}
+	if m := GetAnyPollCreationMessage(message); m != nil {
+		return "[POLL] " + m.GetName()
+	}
+	/* Everything else, group events and calls and votes among them, has nothing
+	 * to say as a line of conversation and is left out on purpose. */
 	return ""
 }
 
