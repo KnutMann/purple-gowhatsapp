@@ -129,6 +129,7 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 		reactions := []historyReaction{}
 		seen := map[string]bool{}
 		var newestFromPhone time.Time
+		var unshowable int
 		for _, historyMsg := range conversation.GetMessages() {
 			webMsg := historyMsg.GetMessage()
 			evt, err := handler.client.ParseWebMessage(chat, webMsg)
@@ -161,6 +162,7 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 
 			text := history_text(evt.Message)
 			if text == "" {
+				unshowable++
 				continue
 			}
 			entries = append(entries, historyEntry{
@@ -177,35 +179,35 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 			}
 		}
 
-		if len(entries) == 0 {
-			// nothing to show, and marks with nothing to sit on are no use
-			handler.log.Infof("History for %s held no messages.", chat)
-			continue
-		}
+		handler.log.Infof("History for %s: %d in the answer, %d to show, %d reaction(s), %d with nothing to show.",
+			chat, len(conversation.GetMessages()), len(entries), len(reactions), unshowable)
 
 		/* The phone answers with what lies before the anchor and stops there, so
 		 * the anchor itself and anything after it is missing from its answer.
 		 * The cache fills exactly that gap, and nothing else: an older message
 		 * the cache happens to hold is one the phone chose not to send, and it
-		 * is not this client's place to overrule that. */
-		for i := range handler.cachedMessages {
-			cached := &handler.cachedMessages[i]
-			if cached.Chat.ToNonAD() != chat.ToNonAD() || seen[cached.ID] {
-				continue
+		 * is not this client's place to overrule that. An answer that brought no
+		 * messages marks no gap, so the cache stays out of it entirely. */
+		if len(entries) > 0 {
+			for i := range handler.cachedMessages {
+				cached := &handler.cachedMessages[i]
+				if cached.Chat.ToNonAD() != chat.ToNonAD() || seen[cached.ID] {
+					continue
+				}
+				if cached.Timestamp.Before(newestFromPhone) {
+					continue
+				}
+				text := history_text(&cached.Message)
+				if text == "" {
+					continue
+				}
+				entries = append(entries, historyEntry{
+					id:        cached.ID,
+					sender:    cached.Sender,
+					timestamp: cached.Timestamp,
+					text:      text,
+				})
 			}
-			if cached.Timestamp.Before(newestFromPhone) {
-				continue
-			}
-			text := history_text(&cached.Message)
-			if text == "" {
-				continue
-			}
-			entries = append(entries, historyEntry{
-				id:        cached.ID,
-				sender:    cached.Sender,
-				timestamp: cached.Timestamp,
-				text:      text,
-			})
 		}
 
 		sort.SliceStable(entries, func(i, j int) bool {
@@ -240,7 +242,6 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 		for _, reaction := range reactions {
 			purple_reaction(handler.account, chat.ToNonAD().String(), isGroup, reaction.sender.ToNonAD().String(), reaction.targetId, reaction.emoji, reaction.timestamp)
 		}
-		handler.log.Infof("History for %s: %d message(s), %d reaction(s).", chat, len(entries), len(reactions))
 	}
 }
 
