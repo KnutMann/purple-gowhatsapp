@@ -31,6 +31,20 @@
 #define GOWHATSAPP_SIGNAL_MESSAGE_ID "gowhatsapp-message-id"
 #define GOWHATSAPP_SIGNAL_REACTION "gowhatsapp-reaction"
 
+/*
+ * GOWHATSAPP_SIGNAL_HISTORY_DONE fires when the primary device has answered a
+ * request for a conversation's earlier messages, including when it answered
+ * with none. Keys: chat, shown (how many were displayed, as a number), isGroup.
+ *
+ * It exists because the answer is worth knowing about even when it is empty.
+ * The phone hands over each stretch of history once; ask a second time and the
+ * answer is a legitimate nothing. A front-end that holds a window back while it
+ * waits for fetched history has otherwise no way to tell that from an answer
+ * still on its way, and can only sit out a timeout for something that has
+ * already arrived and was empty.
+ */
+#define GOWHATSAPP_SIGNAL_HISTORY_DONE "gowhatsapp-history-done"
+
 #define GOWHATSAPP_STATUS_STR_AVAILABLE "available" // this must match whatsmeow's types.PresenceAvailable
 #define GOWHATSAPP_STATUS_STR_AWAY      "unavailable" // this must match whatsmeow's types.PresenceUnavailable
 #define GOWHATSAPP_STATUS_STR_OFFLINE   "offline"
@@ -134,6 +148,7 @@ void gowhatsapp_handle_reaction(PurpleConnection *pc, gowhatsapp_message_t *gwam
 void gowhatsapp_history_init(PurpleConnection *pc);
 void gowhatsapp_display_history_message(gowhatsapp_message_t *gwamsg);
 void gowhatsapp_history_suppress_requests(gboolean suppress);
+void gowhatsapp_handle_history_done(PurpleConnection *pc, gowhatsapp_message_t *gwamsg);
 
 // commands
 enum gowhatsapp_command {

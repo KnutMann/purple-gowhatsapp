@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
-	"time"
 
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/appstate"
@@ -37,7 +36,7 @@ type Handler struct {
 	pictureRequests  chan ProfilePictureRequest
 	httpClient       *http.Client // for executing picture requests
 	blocklist        *types.Blocklist
-	historyRequests  map[string]time.Time // chats a history request was recently sent for, see request_history
+	historyRequests  map[string]*historyRequest // chats a history request was recently sent for, see request_history
 }
 
 /*

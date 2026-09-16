@@ -163,6 +163,25 @@ func gowhatsapp_go_mark_read_conversation(account *PurpleAccount, who *C.char) {
 	}
 }
 
+/*
+ * Tells the front-end that the phone has answered for one conversation, and
+ * with how many messages. Zero is the interesting case: it means the answer
+ * has been and gone and nothing more is coming.
+ */
+func purple_history_finished(account *PurpleAccount, remoteJid string, isGroup bool, shown int) {
+	if shown > 127 {
+		shown = 127 // the field is a char, and "many" is all the answer needs to say
+	}
+	cmessage := C.struct_gowhatsapp_message{
+		account:   account,
+		msgtype:   C.char(C.gowhatsapp_message_type_history_done),
+		subtype:   C.char(shown),
+		remoteJid: C.CString(remoteJid),
+		isGroup:   bool_to_Cchar(isGroup),
+	}
+	C.gowhatsapp_process_message_bridge(cmessage)
+}
+
 //export gowhatsapp_go_request_history
 func gowhatsapp_go_request_history(account *PurpleAccount, who *C.char, count C.int) {
 	handler, ok := handlers[account]

@@ -33,6 +33,18 @@ import (
  * the message cache provides it. Without a cached message for the chat there
  * is nothing to anchor on and the request is skipped.
  */
+/* What became of a request already sent. The phone answers asynchronously, so a
+ * conversation reopened while the answer is still on its way must not be told
+ * that nothing is coming: the answer that is coming speaks for both. Once it has
+ * spoken, a further request is withheld, and then the withholding is what has to
+ * be reported, or a front end waiting for an answer waits for one that will never
+ * be sent. */
+type historyRequest struct {
+	when     time.Time
+	answered bool
+	empty    bool // and so it will stay: each stretch is handed over once
+}
+
 func (handler *Handler) request_history(chatJid string, count int) {
 	if count <= 0 || chatJid == "" {
 		return
@@ -48,17 +60,35 @@ func (handler *Handler) request_history(chatJid string, count int) {
 		// not linked to a phone yet, so there is nobody to ask
 		return
 	}
-	if last, ok := handler.historyRequests[chatJid]; ok && time.Since(last) < time.Minute {
-		// a conversation being re-created in quick succession is not a new request
-		return
+	/* Keyed by the parsed JID and not by the name purple passed in, so that the
+	 * answer, which knows only JIDs, finds the record this leaves behind. */
+	key := chat.ToNonAD().String()
+	isGroup := chat.Server == types.GroupServer
+	if last, ok := handler.historyRequests[key]; ok {
+		if last.empty {
+			/* The phone has already said it has nothing left for this
+			 * conversation, and asking again cannot change that: what it gave
+			 * once it does not give twice, and what it kept back it keeps. The
+			 * answer is known, so it is given here and the phone is left alone. */
+			purple_history_finished(handler.account, key, isGroup, 0)
+			return
+		}
+		if time.Since(last.when) < time.Minute {
+			// a conversation being re-created in quick succession is not a new request
+			if last.answered {
+				// but it is still owed an answer, and this is it: nothing more is coming
+				purple_history_finished(handler.account, key, isGroup, 0)
+			}
+			return
+		}
 	}
-	for jid, when := range handler.historyRequests {
+	for jid, request := range handler.historyRequests {
 		// an entry past its minute holds nothing back and need not be kept
-		if time.Since(when) > time.Minute {
+		if !request.empty && time.Since(request.when) > time.Minute {
 			delete(handler.historyRequests, jid)
 		}
 	}
-	handler.historyRequests[chatJid] = time.Now()
+	handler.historyRequests[key] = &historyRequest{when: time.Now()}
 
 	/* The request points at a message and asks for what came before it. The
 	 * cache supplies that anchor where it can; a conversation nobody has spoken
@@ -328,6 +358,16 @@ func (handler *Handler) handle_history_sync(data *waHistorySync.HistorySync) {
 		for _, reaction := range reactions {
 			purple_reaction(handler.account, chat.ToNonAD().String(), isGroup, reaction.sender.ToNonAD().String(), reaction.targetId, reaction.emoji, reaction.timestamp)
 		}
+
+		/* Answered, and the count says whether anything came of it. Reported even
+		 * when nothing did: a front-end holding a window back for fetched history
+		 * can stop holding it rather than sit out a timeout for an answer that has
+		 * already been and gone. */
+		if request, ok := handler.historyRequests[chat.ToNonAD().String()]; ok {
+			request.answered = true
+			request.empty = len(entries) == 0
+		}
+		purple_history_finished(handler.account, chat.ToNonAD().String(), isGroup, len(entries))
 	}
 	handler.persist_cache()
 }

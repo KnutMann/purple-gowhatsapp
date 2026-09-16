@@ -28,6 +28,7 @@
     MESSAGE_TYPE(group) \
     MESSAGE_TYPE(receipt) \
     MESSAGE_TYPE(reaction) \
+    MESSAGE_TYPE(history_done) \
     MESSAGE_TYPE(max) \
 
 #define GENERATE_MESSAGE_ENUM(ENUM) gowhatsapp_message_type_##ENUM,
