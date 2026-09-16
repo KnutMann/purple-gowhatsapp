@@ -73,21 +73,14 @@ endif()
 
 # build cgo library
 # partly taken from https://github.com/mutse/go-cmake
+# Every Go file of the package, found rather than listed. A list has to be kept
+# in step by hand, and when it is not the build simply stops noticing changes to
+# the file that was left out: it compiles, it links, and it ships the code as it
+# was, with nothing anywhere saying so. CONFIGURE_DEPENDS has cmake look again
+# whenever it builds, so a new file is picked up without reconfiguring.
+file(GLOB GO_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/*.go")
 set(GO_SRCS
-  ${CMAKE_SOURCE_DIR}/bridge.go
-  ${CMAKE_SOURCE_DIR}/login.go
-  ${CMAKE_SOURCE_DIR}/handler.go
-  ${CMAKE_SOURCE_DIR}/send_message.go
-  ${CMAKE_SOURCE_DIR}/handle_message.go
-  ${CMAKE_SOURCE_DIR}/handle_attachment.go
-  ${CMAKE_SOURCE_DIR}/logger.go
-  ${CMAKE_SOURCE_DIR}/send_file.go
-  ${CMAKE_SOURCE_DIR}/mark_read.go
-  ${CMAKE_SOURCE_DIR}/presence.go
-  ${CMAKE_SOURCE_DIR}/profile.go
-  ${CMAKE_SOURCE_DIR}/send_file_checks.go
-  ${CMAKE_SOURCE_DIR}/message_cache.go
-  ${CMAKE_SOURCE_DIR}/groups.go
+  ${GO_SOURCES}
   ${CMAKE_SOURCE_DIR}/bridge.c
   ${CMAKE_SOURCE_DIR}/bridge.h
   ${CMAKE_SOURCE_DIR}/constants.c
