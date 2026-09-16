@@ -305,6 +305,10 @@ func gowhatsapp_go_get_contacts(account *PurpleAccount, flush C.int) {
 						handler.log.Infof("Ignoring contact %s since they are on the blocklist.", jid.ToNonAD().String())
 						continue
 					}
+					if jid.Server == types.GroupServer {
+						// the contact list is the suspected source; if it is, this says so
+						handler.log.Warnf("GROUP JID IN CONTACT LIST: %s %#v", jid.String(), info)
+					}
 					handler.log.Infof("Contact: %s %#v", jid.ToNonAD().String(), info)
 					cmessage := C.struct_gowhatsapp_message{
 						account:   account,
@@ -565,6 +569,17 @@ func purple_display_system_message(account *PurpleAccount, remoteJid string, isG
  * Does work for individuals, not for groups.
  */
 func purple_update_name(account *PurpleAccount, remoteJid string, pushName string) {
+	if strings.HasSuffix(remoteJid, "@g.us") {
+		/* A group has no push name and is nobody's contact. If this ever
+		 * happens, the caller is the one that turns a group into a buddy, and
+		 * that is the question nobody has been able to answer so far.
+		 *
+		 * Logged and nothing more: purple_error ends in purple_connection_error,
+		 * which drops the connection, and a diagnostic must not cost the user
+		 * their session. */
+		purple_debug(3, fmt.Sprintf("GROUP JID AS NAME: %s (%s). Not made into a buddy.\n", remoteJid, pushName))
+		return
+	}
 	cmessage := C.struct_gowhatsapp_message{
 		account:   account,
 		msgtype:   C.char(C.gowhatsapp_message_type_name),

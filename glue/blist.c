@@ -1,3 +1,5 @@
+#include <execinfo.h>
+
 #include "gowhatsapp.h"
 #include "constants.h"
 #include "libwhatsmeow.h" // for gowhatsapp_go_subscribe_presence
@@ -77,8 +79,22 @@ PurpleBuddy * gowhatsapp_ensure_buddy_in_blist(PurpleAccount *account, const cha
 
     /* Groups are chats (bookmarks), not contacts: never create a buddy
      * for a group JID. Opening such a pseudo-contact would start a 1:1
-     * conversation with the group JID, which silently goes nowhere. */
+     * conversation with the group JID, which silently goes nowhere.
+     *
+     * The guard is loud on purpose. It was added from the symptom, and the
+     * caller that reaches it was never identified; upstream cannot find one
+     * either. So whenever it does fire it names itself, with the stack that
+     * led here, and the question is answered by a log line instead of by
+     * another guess. */
     if (purple_str_has_suffix(identifier, "@g.us")) {
+        void *frames[12];
+        int depth = backtrace(frames, G_N_ELEMENTS(frames));
+        char **names = backtrace_symbols(frames, depth);
+        purple_debug_warning(GOWHATSAPP_NAME, "GROUP JID AS BUDDY: %s (name %s). Refused. Stack:\n", identifier, name ? name : "(none)");
+        for (int i = 1; i < depth; i++) {
+            purple_debug_warning(GOWHATSAPP_NAME, "    %s\n", names ? names[i] : "?");
+        }
+        free(names); // MEMCHECK: backtrace_symbols allocates the array with malloc
         return NULL;
     }
 

@@ -41,6 +41,15 @@ func (handler *Handler) send_presence(presence_str string) {
 }
 
 func (handler *Handler) handle_chat_presence(evt *events.ChatPresence) {
+	if evt.MessageSource.IsGroup {
+		/* The chat, not the participant, is what would be reported here, and
+		 * serv_got_typing is the one-to-one call. A front end that makes a
+		 * conversation out of the name it is handed then shows a phantom chat
+		 * for the group. libpurple 2 has no typing notification for chats, so
+		 * there is nothing to report instead. */
+		handler.log.Debugf("Not forwarding group chat presence for %s.", evt.MessageSource.Chat)
+		return
+	}
 	who := handler.lidToPn(evt.MessageSource.Chat, "handling chat (typing) presence").ToNonAD().String()
 	switch evt.State {
 	case types.ChatPresenceComposing:
@@ -53,6 +62,12 @@ func (handler *Handler) handle_chat_presence(evt *events.ChatPresence) {
 }
 
 func (handler *Handler) handle_presence(evt *events.Presence) {
+	if evt.From.Server == types.GroupServer {
+		/* "Last Seen Status" was recorded for a group once, and that is only
+		 * written for a contact which is on the list, so a presence for a group
+		 * reached a buddy that should never have existed. */
+		handler.log.Warnf("GROUP JID IN PRESENCE: %s", evt.From.String())
+	}
 	who := handler.lidToPn(evt.From, "handling presence").ToNonAD().String()
 	if evt.Unavailable {
 		purple_update_presence(handler.account, who, false, evt.LastSeen)
