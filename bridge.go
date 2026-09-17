@@ -311,8 +311,11 @@ func gowhatsapp_go_get_contacts(account *PurpleAccount, flush C.int) {
 					}
 					handler.log.Infof("Contact: %s %#v", jid.ToNonAD().String(), info)
 					cmessage := C.struct_gowhatsapp_message{
-						account:   account,
-						msgtype:   C.char(C.gowhatsapp_message_type_name),
+						account: account,
+						msgtype: C.char(C.gowhatsapp_message_type_name),
+						// from the contact sync, so it is the address book name and may
+						// replace what is there; a push name may not, see purple_update_name
+						subtype:   1,
 						remoteJid: C.CString(jid.ToNonAD().String()),
 					}
 					name := info.FullName
@@ -580,6 +583,9 @@ func purple_update_name(account *PurpleAccount, remoteJid string, pushName strin
 		purple_debug(3, fmt.Sprintf("GROUP JID AS NAME: %s (%s). Not made into a buddy.\n", remoteJid, pushName))
 		return
 	}
+	/* subtype stays 0: a push name rides along with messages and says what its
+	 * owner calls themselves, which is not the name the address book sync
+	 * agreed on. It fills a gap; it does not replace an answer. */
 	cmessage := C.struct_gowhatsapp_message{
 		account:   account,
 		msgtype:   C.char(C.gowhatsapp_message_type_name),

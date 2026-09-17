@@ -127,7 +127,9 @@ gowhatsapp_process_message(gowhatsapp_message_t *gwamsg)
                     purple_account_set_string(gwamsg->account, "self-display-name", gwamsg->name);
                 }
             } else {
-                gowhatsapp_ensure_buddy_in_blist(gwamsg->account, gwamsg->remoteJid, gwamsg->name, TRUE);
+                /* Only the contact sync speaks for the address book; a push name or a
+                 * business name arrives here too and must not overwrite it. */
+                gowhatsapp_ensure_buddy_in_blist(gwamsg->account, gwamsg->remoteJid, gwamsg->name, gwamsg->subtype != 0);
             }
             break;
         case gowhatsapp_message_type_disconnected:
