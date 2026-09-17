@@ -37,6 +37,9 @@ endif()
 if (APPLE)
     target_link_libraries(${TARGET_NAME} PRIVATE "-framework CoreFoundation" "-framework Security" "-framework Foundation" "-framework CoreServices" resolv)
     set_source_files_properties("quarantine.m" PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+    # Adium renders images itself, so every image type goes inline and the
+    # gdk-pixbuf loader is never asked whether it could show one.
+    target_compile_definitions(${TARGET_NAME} PRIVATE GOWHATSAPP_INLINE_ALL_IMAGES)
 
     # Adium loads its OWN libpurple and glib from the app bundle. Left at the
     # build-tree paths the linker records, this plug-in would drag in a SECOND
