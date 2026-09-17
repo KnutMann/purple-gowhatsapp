@@ -119,6 +119,15 @@ func gowhatsapp_go_send_message(account *PurpleAccount, who *C.char, message *C.
 	return -107 // ENOTCONN, see libpurple/prpl.h
 }
 
+//export gowhatsapp_go_send_edit
+func gowhatsapp_go_send_edit(account *PurpleAccount, who *C.char, message *C.char, is_group C.int, target *C.char) int {
+	handler, ok := handlers[account]
+	if !ok {
+		return -1
+	}
+	return handler.send_edit(C.GoString(who), C.GoString(message), is_group != 0, C.GoString(target))
+}
+
 //export gowhatsapp_go_send_file
 func gowhatsapp_go_send_file(account *PurpleAccount, who *C.char, filename *C.char) *C.char {
 	err := "Not connected."

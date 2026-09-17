@@ -69,6 +69,41 @@ func (handler *Handler) prepare_reply(chat types.JID, text string) (bool, *Cache
  *
  * Returns true on success.
  */
+/*
+ * Replaces a message already sent with different text (the counterpart of XEP-0308).
+ * WhatsApp only applies an edit for about a quarter of an hour after the original was
+ * sent; later ones go out without complaint and are silently dropped by the other side,
+ * so the decision whether to offer this at all belongs to the front-end, which knows how
+ * old the message on its screen is.
+ */
+func (handler *Handler) send_edit(who string, message string, isGroup bool, targetId string) int {
+	recipient, err := parseJID(who)
+	if err != nil {
+		return -1
+	}
+	if targetId == "" || message == "" {
+		return -1
+	}
+
+	edit := handler.client.BuildEdit(recipient, targetId, &waE2E.Message{Conversation: &message})
+	send_response, err := handler.client.SendMessage(context.Background(), recipient, edit)
+	if err != nil {
+		purple_display_system_message(handler.account, recipient.ToNonAD().String(), isGroup,
+			fmt.Sprintf("Error editing message: %v", err))
+		return -1
+	}
+
+	handler.log.Infof("Message %s in %s replaced, edit sent as %s.", targetId, recipient, send_response.ID)
+
+	/* Reported back the same way an edit from another device is, so the front-end rewrites
+	 * the line it drew for the original rather than waiting for an echo that names a
+	 * message it has never seen. */
+	purple_message_corrected(handler.account, recipient.ToNonAD().String(), isGroup,
+		handler.client.Store.ID.ToNonAD().String(), true, targetId, message, send_response.Timestamp)
+
+	return 1
+}
+
 func (handler *Handler) send_text_message(recipient types.JID, isGroup bool, message string) bool {
 	msg := &waE2E.Message{Conversation: &message}
 	expiration_days := purple_get_int(handler.account, C.GOWHATSAPP_EXPIRATION_OPTION, 0)

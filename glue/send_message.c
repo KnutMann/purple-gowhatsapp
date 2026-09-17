@@ -3,6 +3,18 @@
 
 static int
 send_message(PurpleConnection *pc, const gchar *who, const gchar *message, gboolean is_group) {
+    /* A front-end that lets the user rewrite something already sent leaves the id of that
+     * message on the conversation, and this is where it is spent. Taken out before anything
+     * else can return early: left lying around it would attach itself to whatever is typed
+     * next, and the wrong message would be replaced. Allocated by the front-end, freed here. */
+    PurpleConversation *conv = is_group
+        ? purple_find_conversation_with_account(PURPLE_CONV_TYPE_CHAT, who, purple_connection_get_account(pc))
+        : purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, who, purple_connection_get_account(pc));
+    char *edit_target = conv ? purple_conversation_get_data(conv, GOWHATSAPP_EDIT_TARGET_KEY) : NULL;
+    if (conv) {
+        purple_conversation_set_data(conv, GOWHATSAPP_EDIT_TARGET_KEY, NULL);
+    }
+
     char *msg = NULL;
     if (purple_account_get_bool(purple_connection_get_account(pc), GOWHATSAPP_BRIDGE_COMPATIBILITY_OPTION, FALSE)) {
         // Bridge Mode: Spectrum allegedly does not do HTML and bitlbee is probably plain-text anyways, so use message as it is, preserving new-lines
@@ -15,7 +27,10 @@ send_message(PurpleConnection *pc, const gchar *who, const gchar *message, gbool
     }
     PurpleAccount *account = purple_connection_get_account(pc);
     char *w = (char *)who; // cgo does not suport const
-    int ret = gowhatsapp_go_send_message(account, w, msg, is_group);
+    int ret = edit_target
+        ? gowhatsapp_go_send_edit(account, w, msg, is_group, edit_target)
+        : gowhatsapp_go_send_message(account, w, msg, is_group);
+    g_free(edit_target);
     g_free(msg);
     return ret;
 }

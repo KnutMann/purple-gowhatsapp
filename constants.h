@@ -49,6 +49,12 @@ CHARCONSTANT(GOWHATSAPP_ATTACHMENT_SYMLINK_OPTION, "attachment-symlink");
 CHARCONSTANT(GOWHATSAPP_RECEIPT_DISPLAY_OPTION, "receipt-display");
 CHARCONSTANT(GOWHATSAPP_REACTION_DISPLAY_OPTION, "reaction-display");
 CHARCONSTANT(GOWHATSAPP_EDIT_DISPLAY_OPTION, "edit-display");
+
+/*
+ * Conversation data a front-end sets to say that the next message sent in that conversation
+ * replaces an earlier one, naming it by id. Consumed and freed by send_message.
+ */
+CHARCONSTANT(GOWHATSAPP_EDIT_TARGET_KEY, "gowhatsapp-edit-target");
 CHARCONSTANT(GOWHATSAPP_FETCH_HISTORY_OPTION, "fetch-history-on-open");
 
 /*
