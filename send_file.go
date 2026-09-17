@@ -21,11 +21,18 @@ import (
 
 // based on https://github.com/tulir/whatsmeow/blob/main/mdtest/main.go
 func (handler *Handler) send_file(who string, filename string) string {
-	isGroup := false // TODO: there is a gowhatsapp_chat_send_file, respect the group chat.
 	recipient, err := parseJID(who)
 	if err != nil {
 		return fmt.Sprintf("%#v", err)
 	}
+	/* Read off the recipient rather than passed in by the caller. A flag that
+	 * has to be set by hand is a flag that can be forgotten, and it was: this
+	 * said false unconditionally, so a file sent to a group announced its
+	 * failures as though a person had written them. Those notices then take
+	 * the one-to-one path, which offers to make a buddy out of the sender, and
+	 * the group ends up in the buddy list as a contact one cannot talk to.
+	 * A JID says for itself whether it is a group. */
+	isGroup := recipient.Server == types.GroupServer
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return fmt.Sprintf("Failed to open %s: %v", filename, err)

@@ -86,7 +86,8 @@ gowhatsapp_chat_send_file(PurpleConnection *pc, int id, const char *filename)
     if (conv != NULL) {
         const gchar *who = purple_conversation_get_data(conv, "name");
         if (who != NULL) {
-            gowhatsapp_send_file(pc, who, (gchar *)filename); // TODO: there should be a group flag here somewhere
+            // the group flag is read off the recipient on the other side, see send_file.go
+            gowhatsapp_send_file(pc, who, (gchar *)filename);
         }
     }
     // TODO: display error if conv or who are NULL
