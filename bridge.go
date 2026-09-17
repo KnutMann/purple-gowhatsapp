@@ -168,6 +168,28 @@ func gowhatsapp_go_mark_read_conversation(account *PurpleAccount, who *C.char) {
  * with how many messages. Zero is the interesting case: it means the answer
  * has been and gone and nothing more is coming.
  */
+/*
+ * Reports that a message already shown has been replaced by its sender. The id is the
+ * ORIGINAL message's, which is what a front-end has on the line it drew; the text is what
+ * should stand there now.
+ */
+func purple_message_corrected(account *PurpleAccount, remoteJid string, isGroup bool, senderJid string,
+	isFromMe bool, targetId string, text string, timestamp time.Time,
+) {
+	cmessage := C.struct_gowhatsapp_message{
+		account:    account,
+		msgtype:    C.char(C.gowhatsapp_message_type_message_corrected),
+		remoteJid:  C.CString(remoteJid),
+		senderJid:  C.CString(senderJid),
+		messageId:  C.CString(targetId),
+		text:       C.CString(text),
+		timestamp:  C.time_t(timestamp.Unix()),
+		isGroup:    bool_to_Cchar(isGroup),
+		isOutgoing: bool_to_Cchar(isFromMe),
+	}
+	C.gowhatsapp_process_message_bridge(cmessage)
+}
+
 func purple_history_finished(account *PurpleAccount, remoteJid string, isGroup bool, shown int) {
 	if shown > 127 {
 		shown = 127 // the field is a char, and "many" is all the answer needs to say

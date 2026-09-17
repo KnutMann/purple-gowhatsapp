@@ -74,9 +74,15 @@ func (handler *Handler) handle_message(message *waE2E.Message, info types.Messag
 	info.MessageSource.Chat = handler.lidToPn(info.MessageSource.Chat, "handling message chat")
 	info.MessageSource.Sender = handler.lidToPn(info.MessageSource.Sender, "handling message sender")
 	isEdit := false
+	editTarget := ""
 	{
 		if pm := message.GetProtocolMessage(); pm != nil {
 			if em := pm.GetEditedMessage(); em != nil {
+				/* The id of the message being replaced, taken here because the protocol
+				 * message is about to go out of reach: info.ID names this stanza, the key
+				 * names the one it corrects, and only the second is any use to a front-end
+				 * that wants to rewrite a line it already showed. */
+				editTarget = pm.GetKey().GetID()
 				message = em
 				isEdit = true
 			}
@@ -266,7 +272,20 @@ func (handler *Handler) handle_message(message *waE2E.Message, info types.Messag
 		}
 	}
 	if text != "" {
-		if isEdit {
+		if isEdit && editTarget != "" {
+			/* Reported as what it is: a replacement for a message already shown. A
+			 * front-end that can rewrite the line does so; one that cannot still gets
+			 * the text below if the account asks for it. */
+			purple_message_corrected(handler.account, info.MessageSource.Chat.ToNonAD().String(),
+				info.MessageSource.IsGroup, info.MessageSource.Sender.ToNonAD().String(),
+				info.IsFromMe, editTarget, text, info.Timestamp)
+
+			setting := purple_get_string(handler.account, C.GOWHATSAPP_EDIT_DISPLAY_OPTION, C.GOWHATSAPP_EDIT_DISPLAY_CHOICE_TEXT)
+			if setting == C.GoString(C.GOWHATSAPP_EDIT_DISPLAY_CHOICE_NONE) {
+				text = ""
+			}
+		}
+		if isEdit && text != "" {
 			text = "[EDIT] " + text
 		}
 		// note: info.PushName always denotes the sender (not the chat)

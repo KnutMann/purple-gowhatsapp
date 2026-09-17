@@ -175,6 +175,9 @@ gowhatsapp_process_message(gowhatsapp_message_t *gwamsg)
         case gowhatsapp_message_type_reaction:
             gowhatsapp_handle_reaction(pc, gwamsg);
             break;
+        case gowhatsapp_message_type_message_corrected:
+            gowhatsapp_handle_message_corrected(pc, gwamsg);
+            break;
         case gowhatsapp_message_type_history_done:
             gowhatsapp_handle_history_done(pc, gwamsg);
             break;

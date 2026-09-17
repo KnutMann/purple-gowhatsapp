@@ -44,6 +44,7 @@
  * already arrived and was empty.
  */
 #define GOWHATSAPP_SIGNAL_HISTORY_DONE "gowhatsapp-history-done"
+#define GOWHATSAPP_SIGNAL_MESSAGE_CORRECTED "gowhatsapp-message-corrected"
 
 #define GOWHATSAPP_STATUS_STR_AVAILABLE "available" // this must match whatsmeow's types.PresenceAvailable
 #define GOWHATSAPP_STATUS_STR_AWAY      "unavailable" // this must match whatsmeow's types.PresenceUnavailable
@@ -149,6 +150,7 @@ void gowhatsapp_history_init(PurpleConnection *pc);
 void gowhatsapp_display_history_message(gowhatsapp_message_t *gwamsg);
 void gowhatsapp_history_suppress_requests(gboolean suppress);
 void gowhatsapp_handle_history_done(PurpleConnection *pc, gowhatsapp_message_t *gwamsg);
+void gowhatsapp_handle_message_corrected(PurpleConnection *pc, gowhatsapp_message_t *gwamsg);
 
 // commands
 enum gowhatsapp_command {

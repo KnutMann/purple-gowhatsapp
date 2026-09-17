@@ -70,6 +70,21 @@ gowhatsapp_add_account_options(GList *account_options)
     }
 
     {
+        /* An edit is reported as a signal either way. This decides whether it is also
+         * written into the conversation as a line of its own, which is all a front-end
+         * that cannot rewrite a message can do with one. */
+        GList *choices = NULL;
+        choices = add_choice(choices, "Text", GOWHATSAPP_EDIT_DISPLAY_CHOICE_TEXT);
+        choices = add_choice(choices, "None", GOWHATSAPP_EDIT_DISPLAY_CHOICE_NONE);
+        option = purple_account_option_list_new( // MEMCHECK: account_options takes ownership
+            "Display edited messages",
+            GOWHATSAPP_EDIT_DISPLAY_OPTION,
+            choices
+        );
+        account_options = g_list_append(account_options, option);
+    }
+
+    {
         GList *choices = NULL;
         choices = add_choice(choices, "Internal", GOWHATSAPP_ECHO_CHOICE_INTERNAL);
         choices = add_choice(choices, "On success", GOWHATSAPP_ECHO_CHOICE_ON_SUCCESS);

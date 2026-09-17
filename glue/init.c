@@ -111,6 +111,10 @@ libpurple2_plugin_load(PurplePlugin *plugin)
         purple_marshal_VOID__POINTER_POINTER, NULL, 2,
         purple_value_new(PURPLE_TYPE_SUBTYPE, PURPLE_SUBTYPE_CONNECTION),
         purple_value_new(PURPLE_TYPE_POINTER));
+    purple_signal_register(plugin, GOWHATSAPP_SIGNAL_MESSAGE_CORRECTED,
+        purple_marshal_VOID__POINTER_POINTER, NULL, 2,
+        purple_value_new(PURPLE_TYPE_SUBTYPE, PURPLE_SUBTYPE_CONNECTION),
+        purple_value_new(PURPLE_TYPE_POINTER));
     return TRUE;
 }
 
