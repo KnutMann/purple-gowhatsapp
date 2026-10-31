@@ -35,3 +35,34 @@ func (handler *Handler) query_group_participants_retry(group_jid types.JID, seco
 	}
 	return []types.GroupParticipant{}
 }
+
+/*
+ * This function queries the list of joined groups from WhatsApp servers and feeds it to purple.
+ * In case of failure (e.g. due to timeout), it waits and retries a few times, then gives up.
+ * Giving up is not fatal: the list only decides which group chats are added to the buddy list,
+ * and messages flow with or without it. The end-of-list marker is sent even after giving up,
+ * or the room list would remain "in progress" and the next query would be refused.
+ * Nothing is sent once the connection is gone; the room list it was meant for is gone with it.
+ */
+func (handler *Handler) query_groups_retry(seconds_backoff int, max_retries int, retry_count int) {
+	groups, err := handler.client.GetJoinedGroups(context.TODO())
+	if err != nil {
+		if !handler.client.IsConnected() {
+			handler.log.Infof("Unable to get list of groups due to %v. Not connected, not retrying.", err)
+			return
+		}
+		if retry_count < max_retries {
+			handler.log.Infof("Unable to get list of groups due to %v. Retrying…", err)
+			time.Sleep(time.Duration(seconds_backoff) * time.Second)
+			handler.query_groups_retry(seconds_backoff, max_retries, retry_count+1)
+			return
+		}
+		handler.log.Warnf("Unable to get list of groups due to %v. Giving up.", err)
+	}
+	for _, group := range groups {
+		group.Participants = handler.groupChatParticipantsLidToPn(group.Participants, "group chat query")
+		purple_update_group(handler.account, group)
+	}
+	// emit an empty group message to denote end of list
+	purple_update_group(handler.account, nil)
+}

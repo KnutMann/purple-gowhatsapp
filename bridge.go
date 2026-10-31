@@ -290,19 +290,7 @@ func gowhatsapp_go_query_group_participants(account *PurpleAccount, groupid *C.c
 func gowhatsapp_go_query_groups(account *PurpleAccount) {
 	handler, ok := handlers[account]
 	if ok {
-		go func() {
-			groups, err := handler.client.GetJoinedGroups(context.TODO())
-			if err != nil {
-				purple_error(account, fmt.Sprintf("Unable to get list of groups: %#v", err), ERROR_FATAL)
-			} else {
-				for _, group := range groups {
-					group.Participants = handler.groupChatParticipantsLidToPn(group.Participants, "group chat query")
-					purple_update_group(account, group)
-				}
-				// emit an empty group message to denote end of list
-				purple_update_group(account, nil)
-			}
-		}()
+		go handler.query_groups_retry(1, 3, 0)
 	} else {
 		purple_error(account, "Cannot get list of groups: Not connected.", ERROR_TRANSIENT)
 	}
