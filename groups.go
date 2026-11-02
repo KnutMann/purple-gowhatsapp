@@ -16,6 +16,12 @@ import (
 func (handler *Handler) query_group_participants_retry(group_jid types.JID, seconds_backoff int, max_retries int, retry_count int) []types.GroupParticipant {
 	group, err := handler.client.GetGroupInfo(context.TODO(), group_jid)
 	if err == nil && group != nil {
+		// Participants by phone number, as the list of joined groups already names them. In a
+		// group that addresses its members anonymously the server names them by LID, and a LID is
+		// nobody in the buddy list: seated under one, a participant shows neither name nor picture.
+		// Translated here, where the answer arrives, so that the group message below, the delayed
+		// answer and the list returned to the caller all seat the same people.
+		group.Participants = handler.groupChatParticipantsLidToPn(group.Participants, "group chat participants query")
 		// always feed the full group info (name included) back to purple,
 		// so conversation titles resolve even on the first fetch
 		purple_update_group(handler.account, group)

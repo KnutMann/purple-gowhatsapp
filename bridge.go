@@ -271,7 +271,6 @@ func gowhatsapp_go_query_group_participants(account *PurpleAccount, groupid *C.c
 					// the status broadcast is not an actual group which participants can be queried from
 				} else {
 					participants := handler.query_group_participants_retry(jid, 1, 10, 0)
-					participants = handler.groupChatParticipantsLidToPn(participants, "group chat participants query")
 					return participants_to_ntcstrarray(participants)
 				}
 			} else {
