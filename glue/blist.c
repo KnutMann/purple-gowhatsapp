@@ -23,6 +23,28 @@ void gowhatsapp_assume_buddy_away(PurpleAccount *account, PurpleBuddy *buddy) {
 }
 
 /*
+ * Hands a buddy back the name the server last gave it.
+ *
+ * libpurple keeps a buddy's server alias in memory only. blist.xml saves the
+ * local alias, and this plug-in leaves that one to the user. So after a restart
+ * every buddy is nameless until the contact sync speaks again, and for a buddy
+ * whose name has not changed the sync says nothing: gowhatsapp_ensure_buddy_in_blist
+ * compares against the name it recorded. libpurple then seats such a buddy in a
+ * group chat under the bare JID, and does not even ask get_cb_alias, because a
+ * buddy was found. The recorded name goes back to the buddy list directly, not
+ * through purple_serv_got_alias, which would write "is now known as" into every
+ * open conversation at every login.
+ */
+void gowhatsapp_restore_server_alias(PurpleAccount *account, PurpleBuddy *buddy) {
+    (void)account;
+    g_return_if_fail(buddy != NULL);
+    const char *recorded = purple_blist_node_get_string(&buddy->node, "server_alias");
+    if (recorded != NULL && *recorded && !purple_strequal(purple_buddy_get_server_alias(buddy), recorded)) {
+        purple_blist_server_alias_buddy(buddy, recorded);
+    }
+}
+
+/*
  * A contact can end up in the list twice: this plug-in files every contact
  * under its own "Whatsapp" group, and a front-end adding the same contact to
  * a group the user chose may create a second node instead of moving ours

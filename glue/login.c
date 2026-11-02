@@ -21,6 +21,9 @@ gowhatsapp_login(PurpleAccount *account)
 
     // keep track on when the connection was (requested to be) established for discarding old messages
     wpd->connected_at_timestamp = time(NULL) - 1;
+
+    // libpurple forgot every server alias at quit; give them back before anything seats a buddy in a chat
+    gowhatsapp_for_all_buddies(account, gowhatsapp_restore_server_alias);
     
     char *proxy_address = NULL;
     PurpleProxyInfo *proxy_info = purple_proxy_get_setup(account);

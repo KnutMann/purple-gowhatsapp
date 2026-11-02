@@ -192,30 +192,12 @@ void gowhatsapp_handle_group(PurpleConnection *pc, gowhatsapp_message_t *gwamsg)
  */
 void 
 gowhatsapp_chat_set_participants(PurpleConvChat *conv_chat, char **participants) {
-    PurpleConversation *conv = purple_conv_chat_get_conversation(conv_chat);
-    PurpleAccount *account = conv ? purple_conversation_get_account(conv) : NULL;
     // remove all users
     purple_conv_chat_clear_users(conv_chat);
-    // now add all current users, resolving their display names where possible
+    // now add all current users; libpurple names each from the buddy list, or asks get_cb_alias
     for(char **participant_ptr = participants; participant_ptr != NULL && *participant_ptr != NULL; participant_ptr++) {
         PurpleConvChatBuddyFlags flags = 0;
-        char *alias = NULL;
-        if (account != NULL) {
-            if (purple_strequal(*participant_ptr, purple_account_get_username(account))) {
-                /* Ourselves: prefer the WhatsApp profile name over our own
-                 * address book card, matching how outgoing messages are shown */
-                const char *self_name = purple_account_get_string(account, "self-display-name", NULL);
-                if (self_name && *self_name) {
-                    alias = strdup(self_name);
-                }
-            }
-            if (alias == NULL || !*alias) {
-                free(alias);
-                alias = gowhatsapp_go_get_display_name(account, *participant_ptr);
-            }
-        }
-        purple_conv_chat_add_user(conv_chat, *participant_ptr, (alias && *alias) ? alias : NULL, flags, FALSE);
-        free(alias);
+        purple_conv_chat_add_user(conv_chat, *participant_ptr, NULL, flags, FALSE);
     }
 }
 

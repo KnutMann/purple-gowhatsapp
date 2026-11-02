@@ -106,6 +106,7 @@ PurpleChat * gowhatsapp_find_blist_chat(PurpleAccount *account, const char *jid)
 void gowhatsapp_add_buddy(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup *group);
 void gowhatsapp_tooltip_text(PurpleBuddy *buddy, PurpleNotifyUserInfo *info, gboolean full);
 void gowhatsapp_assume_buddy_away(PurpleAccount *account, PurpleBuddy *buddy);
+void gowhatsapp_restore_server_alias(PurpleAccount *account, PurpleBuddy *buddy);
 void gowhatsapp_for_all_buddies(PurpleAccount *account, void(*func)(PurpleAccount *, PurpleBuddy *));
 void gowhatsapp_for_all_chats(PurpleAccount *account, void(*func)(PurpleAccount *, PurpleChat *));
 void gowhatsapp_request_chat_profile_picture(PurpleAccount *account, PurpleChat *chat);
