@@ -185,13 +185,37 @@ void gowhatsapp_handle_group(PurpleConnection *pc, gowhatsapp_message_t *gwamsg)
 // Helper functions regarding the purple conversation representing a WhatsApp group
 
 /*
+ * Says whether exactly these participants are seated already, in any order.
+ *
+ * The group info that answers a participants query is also queued as a group message, so the
+ * same list arrives twice within a moment. Seating it again would unseat everyone first, and a
+ * front end takes that literally: Adium forgets what it noted about each participant and lets go
+ * of every stranger among them, only to meet them all again a moment later.
+ */
+static gboolean
+gowhatsapp_chat_has_participants(PurpleConvChat *conv_chat, char **participants) {
+    guint count = 0;
+    for (char **participant_ptr = participants; participant_ptr != NULL && *participant_ptr != NULL; participant_ptr++) {
+        if (purple_conv_chat_cb_find(conv_chat, *participant_ptr) == NULL) {
+            return FALSE;
+        }
+        count++;
+    }
+    return count == g_list_length(purple_conv_chat_get_users(conv_chat));
+}
+
+/*
  * Adds participants to chat.
  * 
  * NOTE: We cannot selectively add missing users since it looks like on Spectrum 
  * only a remove-readd-cycle will trigger the display name resolution.
+ * An unchanged list is left alone, though: there is nothing to resolve anew.
  */
 void 
 gowhatsapp_chat_set_participants(PurpleConvChat *conv_chat, char **participants) {
+    if (gowhatsapp_chat_has_participants(conv_chat, participants)) {
+        return;
+    }
     // remove all users
     purple_conv_chat_clear_users(conv_chat);
     // now add all current users; libpurple names each from the buddy list, or asks get_cb_alias
