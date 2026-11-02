@@ -230,7 +230,7 @@ func (handler *Handler) handle_message(message *waE2E.Message, info types.Messag
 		if pum != nil {
 			cached_message := handler.lookup_cached_message_by_id(pum.GetPollCreationMessageKey().GetID())
 			if cached_message == nil {
-				text = "voted in a poll, but this plug-in failed to keep track of the poll."
+				text = "voted in a poll, but Adium no longer has the poll and cannot show the vote."
 			} else {
 				decrypted, err := handler.client.DecryptPollVote(context.TODO(), evt)
 				if err != nil {
